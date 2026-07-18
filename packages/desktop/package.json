@@ -1,0 +1,36 @@
+{
+  "name": "@claude-code-best/desktop",
+  "productName": "SuperWork",
+  "description": "SuperWork desktop interface for Claude Code compatible workflows",
+  "author": "SuperWork contributors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "build": "bun run build:renderer && bun run build:processes",
+    "build:renderer": "vite build",
+    "build:processes": "bun run scripts/build-processes.ts",
+    "start": "electron .",
+    "package:win": "bun run build && electron-builder --win --config electron-builder.yml",
+    "typecheck": "bun ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "marked": "^17.0.6",
+    "mermaid": "^11.14.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.8"
+  }
+}

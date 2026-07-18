@@ -1,0 +1,87 @@
+node_modules
+.DS_Store
+dist
+coverage
+.env
+*.log
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.lock
+src/utils/vendor/
+
+# AI tool runtime directories
+.agents/
+.claude/
+.omx/
+.docs/task/
+# Binary / screenshot files (root only)
+/*.png
+!/main.png
+*.bmp
+
+# Internal system prompt documents
+Claude-Opus-*.txt
+Claude-Sonnet-*.txt
+Claude-Haiku-*.txt
+
+# Agent / tool state dirs
+.swarm/
+.agents/__pycache__/
+
+# Python bytecode
+__pycache__/
+*.pyc
+logs
+
+data
+.cache/
+.temp/
+.tmp/
+*.jsonl
+*.jsonl.bak
+
+# Desktop build artifacts and runtime state
+packages/desktop/dist/
+packages/desktop/release*/
+packages/desktop/build.log
+packages/desktop/.electron-dist/
+packages/desktop/.runtime/
+packages/desktop/logs/
+packages/desktop/data/
+.claudecode/
+
+# Conversation-generated local artifacts currently present in the workspace
+/beaa6d64-4821-43fe-a611-d1ac444de8cd/
+/gushi.txt
+/唐诗精选.txt
+/seckill*.json
+/seckill*.puml
+/seckill*.plantuml
+/seckill*.bak
+/snake-game.html
+/snake-game.html.bak
+/snake.py
+/sorting-visualizer.html
+.omc
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**
+teach-me
+credentials.json
+
+# Session-scoped progress / state files written by agents and skills
+# (autofix-pr persistence, test-progress checkpoint, recovery notes).
+# Transient, never meant to enter the repo.
+.claude-impl-state.md
+.claude-progress.md
+.claude-recovery.md
+.test-progress.md
+.squash-tmp/
+.git.*-backup

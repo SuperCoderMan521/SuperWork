@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "strict": true,
+    "types": ["bun", "vite/client"]
+  },
+  "include": [
+    "electron",
+    "core",
+    "shared",
+    "scripts",
+    "renderer/src",
+    "tests",
+    "../../src/types/**/*.d.ts"
+  ]
+}

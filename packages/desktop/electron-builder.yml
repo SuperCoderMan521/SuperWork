@@ -1,0 +1,21 @@
+appId: win.claude-code-best.superwork
+productName: SuperWork
+directories:
+  output: release
+files:
+  - dist/electron/**
+  - dist/renderer/**
+  - package.json
+extraResources:
+  - from: dist/core
+    to: core
+  - from: dist/runtime
+    to: runtime
+asar: true
+win:
+  target:
+    - nsis
+  artifactName: SuperWork-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

@@ -1,0 +1,5 @@
+export const DESKTOP_COMMAND_CHANNEL = 'desktop:command'
+export const DESKTOP_EVENT_CHANNEL = 'desktop:event'
+export const DESKTOP_DIAGNOSTICS_GET_CHANNEL = 'desktop:diagnostics:get'
+export const DESKTOP_LOG_FOLDER_OPEN_CHANNEL = 'desktop:logs:open-folder'
+export const DESKTOP_WORKSPACE_SELECT_CHANNEL = 'desktop:workspace:select'

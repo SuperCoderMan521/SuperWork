@@ -420,14 +420,20 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .diagnostics-drawer footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
 .diagnostics-drawer footer button, .secondary-button { border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: inherit; background: var(--surface); font-size: 12px; }
 
-.permission-panel { position: fixed; left: 276px; bottom: 96px; z-index: 12; display: flex; align-items: center; justify-content: space-between; gap: 18px; width: min(560px, calc(100vw - 610px)); padding: 14px 16px; border: 1px solid #5b4e36; border-radius: 12px; background: var(--surface-raised); box-shadow: 0 18px 50px rgba(0,0,0,.42); animation: permission-slide-in .18s ease-out; }
-.permission-panel p { margin: 4px 0 0; color: var(--muted); font: 12px ui-monospace, monospace; }
-.permission-actions { display: flex; gap: 8px; }
-.permission-actions button { border-radius: 8px; padding: 8px 11px; }
+.permission-panel { position: fixed; left: 276px; right: 28px; bottom: 96px; z-index: 12; display: flex; align-items: center; justify-content: space-between; gap: 18px; box-sizing: border-box; width: calc(100vw - 332px); max-width: 760px; padding: 14px 16px; border: 1px solid #5b4e36; border-radius: 12px; background: var(--surface-raised); box-shadow: 0 18px 50px rgba(0,0,0,.42); animation: permission-slide-in .18s ease-out; }
+.permission-panel > div:first-child { flex: 1 1 auto; min-width: 0; }
+.permission-panel p { overflow-wrap: anywhere; margin: 4px 0 0; color: var(--muted); font: 12px ui-monospace, monospace; }
+.permission-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.permission-actions button { border-radius: 8px; padding: 8px 11px; white-space: nowrap; }
 .permission-actions button:disabled { cursor: wait; opacity: .55; }
 .permission-submitting { align-self: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .permission-button { border: 1px solid #55585f; color: #e6e7e9; background: #303238; }
 @keyframes permission-slide-in { from { opacity: 0; transform: translateX(-18px) translateY(8px); } to { opacity: 1; transform: translateX(0) translateY(0); } }
+@media (max-width: 760px) {
+  .permission-panel { left: 16px; right: 16px; width: auto; }
+  .permission-panel { align-items: stretch; flex-direction: column; }
+  .permission-actions { justify-content: flex-end; }
+}
 .buddy-toggle { margin: 8px 12px; width: calc(100% - 24px); padding: 7px 10px; border: 1px solid #3a3d46; border-radius: 7px; background: #202229; color: #e8e9ed; text-align: left; cursor: pointer; font-size: 12px; }
 .buddy-panel { position: relative; margin: 8px 12px; padding: 12px; border: 1px solid #3a3d46; border-radius: 8px; background: #17181c; color: #e8e9ed; overflow: auto; font-size: 12px; }
 .buddy-panel h2 { margin: 0; font-size: 16px; color: #f2f3f5; }.buddy-collapse { position: absolute; top: 7px; right: 8px; border: 0; background: transparent; color: #9da1ad; cursor: pointer; font-size: 18px; }.buddy-hatch { border: 1px solid #555b6b; background: #242733; color: #fff; border-radius: 6px; padding: 5px 10px; cursor: pointer; }

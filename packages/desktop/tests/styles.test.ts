@@ -42,4 +42,15 @@ describe('desktop styles', () => {
     expect(menuRule).toContain('right: 0')
     expect(menuRule).toContain('z-index:')
   })
+
+  test('keeps permission actions horizontal when the file panel is open', () => {
+    const panelRule = css.match(/\.permission-panel\s*\{[^}]+\}/)?.[0] ?? ''
+    const actionRule = css.match(/\.permission-actions\s*\{[^}]+\}/)?.[0] ?? ''
+    const buttonRule = css.match(/\.permission-actions button\s*\{[^}]+\}/)?.[0] ?? ''
+
+    expect(panelRule).toContain('max-width: 760px')
+    expect(panelRule).toContain('right: 28px')
+    expect(actionRule).toContain('flex: 0 0 auto')
+    expect(buttonRule).toContain('white-space: nowrap')
+  })
 })

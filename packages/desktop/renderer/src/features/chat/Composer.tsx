@@ -115,7 +115,7 @@ export function Composer({
             title="中断生成"
             onClick={onInterrupt}
           >
-            ■
+            <span className="stop-glyph" aria-hidden="true" />
           </button>
         ) : (
           <button

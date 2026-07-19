@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { extractPathCandidates, looksLikeFilePath } from '../shared/file-paths.js'
 import type {
   DesktopConfigItem,
@@ -287,6 +287,7 @@ export function memoryFilesForCwd(cwd: string): DesktopMemoryFile[] {
       path: join(cwd, 'CLAUDE.md'),
       scope: 'project',
       exists: existsSync(join(cwd, 'CLAUDE.md')),
+      description: '当前项目的主要开发规则与上下文',
     },
     {
       id: 'project-dot-claude',
@@ -294,6 +295,7 @@ export function memoryFilesForCwd(cwd: string): DesktopMemoryFile[] {
       path: join(cwd, '.claude', 'CLAUDE.md'),
       scope: 'project',
       exists: existsSync(join(cwd, '.claude', 'CLAUDE.md')),
+      description: '当前项目的 Claude Code 专用规则',
     },
     {
       id: 'user-claude',
@@ -301,21 +303,73 @@ export function memoryFilesForCwd(cwd: string): DesktopMemoryFile[] {
       path: join(claudeHome(), 'CLAUDE.md'),
       scope: 'user',
       exists: existsSync(join(claudeHome(), 'CLAUDE.md')),
-    },
-    {
-      id: 'auto-memory',
-      label: 'Auto MEMORY.md',
-      path: join(claudeHome(), 'memory', 'MEMORY.md'),
-      scope: 'auto',
-      exists: existsSync(join(claudeHome(), 'memory', 'MEMORY.md')),
+      description: '适用于所有项目的用户级规则',
     },
   ]
   return files
 }
 
+const MEMORY_TYPE_DESCRIPTIONS = {
+  user: '用户信息、目标与偏好',
+  feedback: '用户对工作方式的反馈与约束',
+  project: '无法直接从代码推导的项目背景和长期事项',
+  reference: '外部系统与资料入口',
+} as const
+
+export async function discoverAutoMemoryFiles(memoryDir: string): Promise<DesktopMemoryFile[]> {
+  const files: DesktopMemoryFile[] = []
+  async function scan(directory: string): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => [])
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) {
+        await scan(path)
+        continue
+      }
+      if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.md')) continue
+      const relativePath = relative(memoryDir, path).split(sep).join('/')
+      const content = await readFile(path, 'utf8').catch(() => '')
+      const frontmatter = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)
+      const type = frontmatter?.[1]?.match(/^type:\s*(user|feedback|project|reference)\s*$/m)?.[1]
+      let description = entry.name.toLowerCase() === 'memory.md'
+        ? '自动记忆索引'
+        : type ? MEMORY_TYPE_DESCRIPTIONS[type as keyof typeof MEMORY_TYPE_DESCRIPTIONS] : '未分类记忆文件'
+      const team = relativePath.startsWith('team/')
+      if (team) description = `团队共享记忆 · ${description}`
+      files.push({
+        id: path,
+        label: entry.name,
+        path,
+        scope: team ? 'team' : 'auto',
+        exists: true,
+        description,
+        relativePath,
+        depth: relativePath.split('/').length - 1,
+      })
+    }
+  }
+  await scan(memoryDir)
+  return files
+}
+
+type DesktopConfigServiceOptions = {
+  getAutoMemoryPath?: () => string | Promise<string>
+}
+
 export class DesktopConfigService {
+  private readonly getAutoMemoryPath: () => string | Promise<string>
+
+  constructor(options: DesktopConfigServiceOptions = {}) {
+    this.getAutoMemoryPath = options.getAutoMemoryPath ?? (async () => {
+      const module = await import('../../../src/memdir/paths.js')
+      return module.getAutoMemPath()
+    })
+  }
+
   async snapshot(cwd: string): Promise<DesktopConfigSnapshot> {
-    const [skills, mcpServers, plugins, modelConfig] = await Promise.all([
+    const autoMemoryPath = await this.getAutoMemoryPath()
+    const [skills, mcpServers, plugins, modelConfig, autoMemoryFiles] = await Promise.all([
       listExistingDirectoryItems([
         { path: join(cwd, '.agents', 'skills'), description: 'Project skill' },
         { path: join(cwd, '.claude', 'skills'), description: 'Project Claude skill' },
@@ -332,13 +386,14 @@ export class DesktopConfigService {
         { path: join(claudeHome(), '..', '.codex', 'plugins'), description: 'Codex plugin' },
       ]),
       this.readModelConfig(cwd),
+      discoverAutoMemoryFiles(autoMemoryPath),
     ])
     return {
       cwd,
       skills,
       mcpServers,
       plugins,
-      memoryFiles: memoryFilesForCwd(cwd),
+      memoryFiles: [...memoryFilesForCwd(cwd), ...autoMemoryFiles],
       modelConfig,
     }
   }

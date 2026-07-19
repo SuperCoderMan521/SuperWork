@@ -122,6 +122,7 @@ function updateSession(
         role: 'assistant' as const,
         content: '',
         createdAt: Date.now(),
+        displayOrder: event.sequence,
       }
       const exists = event.messageId in session.messages
       session = {
@@ -141,6 +142,11 @@ function updateSession(
     }
     case 'tool.updated': {
       const exists = event.tool.id in session.tools
+      const previousTool = session.tools[event.tool.id]
+      const tool = {
+        ...event.tool,
+        displayOrder: previousTool?.displayOrder ?? event.tool.displayOrder ?? event.sequence,
+      }
       const terminal = event.tool.state !== 'pending' && event.tool.state !== 'running'
       const permissionOrder = terminal
         ? session.permissionOrder.filter(
@@ -152,7 +158,7 @@ function updateSession(
       )
       session = {
         ...session,
-        tools: { ...session.tools, [event.tool.id]: event.tool },
+        tools: { ...session.tools, [event.tool.id]: tool },
         toolOrder: exists ? session.toolOrder : [...session.toolOrder, event.tool.id],
         permissions,
         permissionOrder,

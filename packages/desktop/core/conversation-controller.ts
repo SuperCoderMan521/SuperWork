@@ -104,6 +104,7 @@ export class DesktopConversationController {
       role: 'user' as const,
       content: prompt,
       createdAt: this.now(),
+      displayOrder: session.sequence + 1,
     }
     session.messages.push(userMessage)
     session.updatedAt = this.now()

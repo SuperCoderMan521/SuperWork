@@ -56,15 +56,17 @@ function SlashCommandContent({ content }: { content: string }): React.ReactNode 
 
 export function MessageRow({
   message,
+  showThinkingMeta = false,
 }: {
   message: DesktopMessage
+  showThinkingMeta?: boolean
 }): React.ReactNode {
   if (message.kind === 'thinking' || message.kind === 'redacted_thinking') {
     return (
       <article
         className={`message message-${message.role} message-kind-${message.kind}`}
       >
-        <MessageMeta role={message.role} />
+        {showThinkingMeta ? <MessageMeta role={message.role} /> : null}
         <details className={`thinking-block thinking-${message.role}`}>
           <summary>思考过程</summary>
           <div>{message.content || '此思考内容已隐藏'}</div>

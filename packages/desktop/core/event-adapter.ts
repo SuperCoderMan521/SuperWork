@@ -72,6 +72,7 @@ export class DesktopEventAdapter {
             kind: 'text',
             content: result,
             createdAt: this.now(),
+            displayOrder: this.nextDisplayOrder(),
           },
         }),
       ]
@@ -97,8 +98,26 @@ export class DesktopEventAdapter {
     const messageBlockCount = blocks.filter(block =>
       block.type === 'text' || block.type === 'thinking' || block.type === 'redacted_thinking',
     ).length
-    const messageEvents = blocks.flatMap((block, index) => {
+    const events = blocks.flatMap((block, index) => {
       const blockType = stringProperty(block, 'type')
+      if (blockType === 'tool_use' || blockType === 'server_tool_use') {
+        const id = stringProperty(block, 'id')
+        const name = stringProperty(block, 'name')
+        if (!id || !name) return []
+        const input = block.input
+        const tool: DesktopToolCall = {
+          id,
+          name,
+          state: 'running',
+          summary: toolSummary(input),
+          input,
+          startedAt: this.now(),
+          displayOrder: this.nextDisplayOrder(),
+        }
+        this.tools.set(id, tool)
+        return [this.sessionEvent({ type: 'tool.updated', tool })]
+      }
+
       const content = blockType === 'text'
         ? stringProperty(block, 'text')
         : blockType === 'thinking'
@@ -124,30 +143,14 @@ export class DesktopEventAdapter {
           kind,
           content,
           createdAt: this.now(),
+          displayOrder: this.nextDisplayOrder(),
         },
       })]
     })
-
-    const toolEvents = blocks
-      .filter(block => block.type === 'tool_use' || block.type === 'server_tool_use')
-      .flatMap(block => {
-        const id = stringProperty(block, 'id')
-        const name = stringProperty(block, 'name')
-        if (!id || !name) return []
-        const input = block.input
-        const tool: DesktopToolCall = {
-          id,
-          name,
-          state: 'running',
-          summary: toolSummary(input),
-          input,
-          startedAt: this.now(),
-        }
-        this.tools.set(id, tool)
-        return [this.sessionEvent({ type: 'tool.updated', tool })]
-      })
-    if (messageEvents.length > 0) this.hasAssistantOutput = true
-    return [...messageEvents, ...toolEvents]
+    if (events.some(event => event.type === 'message.added')) {
+      this.hasAssistantOutput = true
+    }
+    return events
   }
 
   private textDelta(value: UnknownRecord): string | undefined {
@@ -180,6 +183,7 @@ export class DesktopEventAdapter {
         state: block.is_error === true ? 'error' : 'success',
         output,
         completedAt: this.now(),
+        displayOrder: previous.displayOrder,
       }
       this.tools.set(id, tool)
       return [this.sessionEvent({ type: 'tool.updated', tool })]
@@ -192,5 +196,9 @@ export class DesktopEventAdapter {
       sessionId: this.sessionId,
       sequence: ++this.sequence,
     } as unknown as SessionEvent
+  }
+
+  private nextDisplayOrder(): number {
+    return this.sequence + 1
   }
 }

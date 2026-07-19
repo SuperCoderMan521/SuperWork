@@ -48,6 +48,7 @@ describe('DesktopEventAdapter', () => {
           kind: 'text',
           content: 'Done',
           createdAt: 100,
+          displayOrder: 1,
         },
       },
     ])
@@ -94,6 +95,7 @@ describe('DesktopEventAdapter', () => {
           summary: 'a.ts',
           input: { file_path: 'a.ts' },
           startedAt: 100,
+          displayOrder: 1,
         },
       },
     ])
@@ -129,6 +131,7 @@ describe('DesktopEventAdapter', () => {
           input: { file_path: 'a.ts' },
           startedAt: 200,
           completedAt: 200,
+          displayOrder: 1,
           output: 'file text',
         },
       },
@@ -146,6 +149,32 @@ describe('DesktopEventAdapter', () => {
       ] },
     })
     expect(events.map(event => event.type)).toEqual(['message.added', 'tool.updated'])
+  })
+
+  test('preserves interleaved assistant text and tool block order', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+    const events = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-1',
+      message: { content: [
+        { type: 'text', text: 'First text' },
+        { type: 'tool_use', id: 'tool-1', name: 'Read', input: { file_path: 'a.ts' } },
+        { type: 'text', text: 'Second text' },
+      ] },
+    })
+
+    expect(events.map(event => event.type)).toEqual([
+      'message.added',
+      'tool.updated',
+      'message.added',
+    ])
+    expect(events.map(event =>
+      event.type === 'message.added'
+        ? event.message.displayOrder
+        : event.type === 'tool.updated'
+          ? event.tool.displayOrder
+          : undefined,
+    )).toEqual([1, 2, 3])
   })
 
   test('converts thinking blocks into a distinct desktop message', () => {
@@ -176,6 +205,7 @@ describe('DesktopEventAdapter', () => {
           kind: 'text',
           content: 'Local command output',
           createdAt: 100,
+          displayOrder: 1,
         },
       },
     ])

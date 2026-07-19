@@ -178,13 +178,11 @@ export function ConversationFilesPanel({
   selectedPath,
   fileContent,
   onOpen,
-  onSave,
 }: {
   files: ConversationFileEntry[]
   selectedPath: string | null
   fileContent: string | null
   onOpen: (path: string) => void
-  onSave: (path: string, content: string) => void
 }): React.ReactNode {
   const [draft, setDraft] = useState(fileContent ?? '')
   const selected = useMemo(
@@ -224,13 +222,6 @@ export function ConversationFilesPanel({
         <section className="file-preview">
           <header>
             <h3>{selectedPath}</h3>
-            <button
-              type="button"
-              onClick={() => onSave(selectedPath, draft)}
-              disabled={fileContent === null}
-            >
-              保存
-            </button>
           </header>
           {selected?.diff ? <DiffPreview diff={selected.diff} /> : null}
           <FileViewer path={selectedPath} content={fileContent} />

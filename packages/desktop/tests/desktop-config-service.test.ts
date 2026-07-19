@@ -76,7 +76,9 @@ describe('DesktopConfigService.writeConfig', () => {
   test('persists OpenAI-compatible model config where Claude Code reads it', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'superwork-config-'))
     try {
-      const service = new DesktopConfigService()
+      const service = new DesktopConfigService({
+        getAutoMemoryPath: () => join(cwd, 'missing-memory'),
+      })
 
       await service.writeConfig(cwd, {
         provider: 'openai',
@@ -116,7 +118,9 @@ describe('DesktopConfigService.writeConfig', () => {
   test('persists Anthropic-compatible model config where Claude Code reads it', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'superwork-config-'))
     try {
-      const service = new DesktopConfigService()
+      const service = new DesktopConfigService({
+        getAutoMemoryPath: () => join(cwd, 'missing-memory'),
+      })
 
       await service.writeConfig(cwd, {
         provider: 'anthropic',

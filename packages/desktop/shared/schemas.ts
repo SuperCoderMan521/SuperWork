@@ -44,6 +44,7 @@ export const DesktopMessageSchema = z.object({
   kind: z.enum(['text', 'thinking', 'redacted_thinking', 'system', 'error']).optional(),
   content: z.string(),
   createdAt: z.number().int().nonnegative(),
+  displayOrder: z.number().int().nonnegative().optional(),
 })
 
 export const DesktopToolCallSchema = z.object({
@@ -62,6 +63,7 @@ export const DesktopToolCallSchema = z.object({
   output: z.string().optional(),
   startedAt: z.number().int().nonnegative().optional(),
   completedAt: z.number().int().nonnegative().optional(),
+  displayOrder: z.number().int().nonnegative().optional(),
 })
 
 export const DesktopPermissionRequestSchema = z.object({
@@ -110,6 +112,9 @@ export const DesktopMemoryFileSchema = z.object({
   scope: z.enum(['project', 'user', 'auto', 'team']),
   exists: z.boolean(),
   content: z.string().optional(),
+  description: z.string().optional(),
+  relativePath: z.string().optional(),
+  depth: z.number().int().nonnegative().optional(),
 })
 
 export const DesktopModelConfigSchema = z.object({

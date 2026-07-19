@@ -175,7 +175,10 @@ export function ConfigCenter({
                       else onCreateMemory(file.path)
                     }}
                   >
-                    <strong>{file.label}</strong>
+                    <span className="memory-file-copy">
+                      <strong>{file.relativePath ?? file.label}</strong>
+                      {file.description ? <small>{file.description}</small> : null}
+                    </span>
                     <span>{file.exists ? file.scope : '未创建'}</span>
                   </button>
                   {!file.exists ? (

@@ -69,7 +69,6 @@ describe('desktop chat UI', () => {
     expect(html).toContain('Analyze API')
     expect(html).toContain('G:/project')
     expect(html).toContain('新任务')
-    expect(html).toContain('brand-super')
     expect(html).toContain('Super')
     expect(html).toContain('Work')
   })
@@ -149,13 +148,10 @@ describe('desktop chat UI', () => {
       />,
     )
     expect(html).toContain('Hello')
-    expect(html).toContain('读取中')
-    expect(html).toContain('src/query.ts')
+    expect(html).not.toContain('src/query.ts')
     expect(html).toContain('输入问题')
     expect(html).toContain('选择工作区')
     expect(html).toContain('aria-label="中断生成"')
-    expect(html).toContain('brand-super')
-    expect(html).toContain('brand-work')
   })
 
   test('shows a workspace-required hint when the session has no real workspace', () => {
@@ -237,10 +233,9 @@ describe('desktop chat UI', () => {
         onOpenFile={() => {}}
       />,
     )
-    expect(html.indexOf('message-meta')).toBeLessThan(html.indexOf('thinking-block'))
+    expect(html).toContain('message-meta')
+    expect(html).toContain('brand-name')
     expect(html).toContain('message-kind-thinking')
-    expect(html).toContain('brand-super')
-    expect(html).toContain('brand-work')
     expect(html).toContain('thinking-block thinking-assistant')
     expect(html).toContain('思考过程')
   })
@@ -272,6 +267,46 @@ describe('desktop chat UI', () => {
       messageOrder: ['first', 'second'],
       tools: {
         tool: { id: 'tool', name: 'Read', state: 'success', summary: 'file', startedAt: 200 },
+      },
+      toolOrder: ['tool'],
+    })
+
+    expect(timeline.map(item => item.id)).toEqual([
+      'message:first',
+      'tool:tool',
+      'message:second',
+    ])
+  })
+
+  test('uses stable display order before timestamps for messages and tools', () => {
+    const timeline = getConversationTimeline({
+      ...session,
+      messages: {
+        first: {
+          id: 'first',
+          role: 'assistant',
+          content: 'first',
+          createdAt: 100,
+          displayOrder: 1,
+        },
+        second: {
+          id: 'second',
+          role: 'assistant',
+          content: 'second',
+          createdAt: 100,
+          displayOrder: 3,
+        },
+      },
+      messageOrder: ['first', 'second'],
+      tools: {
+        tool: {
+          id: 'tool',
+          name: 'Read',
+          state: 'running',
+          summary: 'a.ts',
+          startedAt: 100,
+          displayOrder: 2,
+        },
       },
       toolOrder: ['tool'],
     })
@@ -376,11 +411,10 @@ describe('desktop chat UI', () => {
     )
 
     expect(html).toContain('tool-group')
-    expect(html).toContain('编辑中')
-    expect(html).toContain('2 个文件')
-    expect(html).toContain('tool-group-count')
-    expect(html).toContain('点击展开')
-    expect(html).toContain('src/old.ts')
+    expect(html).toContain('编辑')
+    expect(html).not.toContain('tool-group-description')
+    expect(html).not.toContain('点击展开')
+    expect(html).not.toContain('src/old.ts')
     expect(html).toContain('src/current.ts')
     expect(html.match(/<details/g)?.length).toBe(1)
   })
@@ -460,12 +494,11 @@ describe('desktop chat UI', () => {
         selectedPath="src/query.ts"
         fileContent="export const ok = true"
         onOpen={() => {}}
-        onSave={() => {}}
       />,
     )
     expect(html).toContain('文件')
     expect(html).toContain('src/query.ts')
-    expect(html).toContain('保存')
+    expect(html).not.toContain('保存')
     expect(html).toContain('export const ok')
   })
 
@@ -477,7 +510,6 @@ describe('desktop chat UI', () => {
         selectedPath="src/query.ts"
         fileContent={'export const ok = true\nconsole.log(ok)'}
         onOpen={() => {}}
-        onSave={() => {}}
       />,
     )
 

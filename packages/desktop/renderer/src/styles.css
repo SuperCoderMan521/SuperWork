@@ -192,59 +192,51 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .tool-running small, .tool-pending small { color: #fff; }
 .tool-success .tool-icon { color: #c9dfcf; background: #223027; }
 .tool-error .tool-icon, .tool-denied .tool-icon { color: #efc9cd; background: #3b292d; }
-.tool-group { margin: 0 0 16px 100px; border: 1px solid var(--border); border-radius: 10px; background: #17191c; overflow: hidden; }
+.tool-group { width: fit-content; margin: 0 0 10px 100px; border: 0; background: transparent; overflow: visible; }
 .tool-group > summary {
   position: relative;
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  gap: 9px;
-  align-items: center;
-  padding: 11px 12px;
-}
-.tool-group > summary > * { position: relative; z-index: 1; }
-.tool-group-count {
   display: inline-flex;
+  gap: 8px;
   align-items: center;
-  justify-content: center;
-  min-width: 74px;
-  padding: 3px 9px;
-  border: 1px solid #3c3f45;
-  border-radius: 999px;
-  color: #dfe0e3;
-  background: #23252a;
-  font: 11px ui-monospace, monospace;
-  white-space: nowrap;
+  padding: 3px 0;
+  color: var(--muted);
+  list-style: none;
 }
-.tool-group small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.tool-group > summary::-webkit-details-marker { display: none; }
+.tool-group > summary > * { position: relative; z-index: 1; }
+.tool-group-description { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tool-group small { display: none; }
 .tool-group-running > summary {
-  color: #fff;
-  background: #1c1e22;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
 }
 .tool-group-running > summary::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.06) 45%, rgba(255, 255, 255, 0.18) 50%, rgba(255, 255, 255, 0.06) 55%, transparent 100%);
-  background-size: 220% 100%;
-  animation: running-gradient 2s linear infinite;
-  pointer-events: none;
-  opacity: 0.75;
+  content: none;
 }
 .tool-group-running .tool-icon {
-  color: #f2f3f5;
-  background: #2b2e34;
+  display: none;
 }
-.tool-group-running .tool-group-count {
-  color: #fff;
-  border-color: #4a4d54;
-  background: #31343a;
+.tool-group-running > summary strong {
+  color: transparent;
+  background: linear-gradient(100deg, #74777d 15%, #f5f6f7 45%, #74777d 75%);
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: tool-text-shimmer 1.8s linear infinite;
+  font-size: 13px;
+  font-weight: 500;
 }
+.tool-group-running .tool-group-description { color: #fff; }
 .tool-group-running small { color: #fff; }
 .tool-group-running .tool-card { border-color: #33363b; background: #1b1d21; }
 .tool-group .tool-card { margin: 10px; }
 .tool-group .tool-card-expanded { margin: 0; border: 0; border-top: 1px solid #33363b; border-radius: 0; }
 .tool-group .tool-card-expanded:first-of-type { border-top: 0; }
+@keyframes tool-text-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
 .diff-stat { color: #9fcda7 !important; font-family: ui-monospace, monospace; }
 .diff-view, .file-diff { border-top: 1px solid var(--border); background: #101113; }
 .diff-view header, .file-diff header { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; color: var(--muted); font-size: 12px; }
@@ -277,6 +269,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .send-button:hover, .stop-button:hover { background: #3a3d43; }
 .send-button:disabled { cursor: default; opacity: .4; }
 .stop-button { border-color: #704b50; background: #51383c; }
+.stop-glyph { display: block; width: 8px; height: 8px; border-radius: 1px; background: currentColor; }
 .workspace-picker { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 7px; align-items: center; margin-top: 8px; border: 0; color: var(--muted); background: transparent; text-align: left; font-size: 11px; }
 .workspace-picker:hover { color: #d8d9dc; }
 .workspace-picker strong { overflow: hidden; color: #c8c9cc; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
@@ -345,6 +338,9 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .memory-row > button, .memory-editor > button { display: flex; justify-content: space-between; gap: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: #d8d9dc; background: #141518; text-align: left; }
 .memory-row > button.active, .memory-row > button:hover, .memory-editor > button.active, .memory-editor > button:hover { background: var(--selection); }
 .memory-row > button span, .memory-editor > button span { color: var(--muted); font-size: 12px; }
+.memory-file-copy { display: grid; min-width: 0; gap: 3px; }
+.memory-file-copy strong { overflow: hidden; color: #d8d9dc; text-overflow: ellipsis; white-space: nowrap; }
+.memory-file-copy small { color: var(--muted); font-size: 12px; font-weight: 400; }
 .memory-editor textarea { min-height: 220px; resize: vertical; border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: #e0e1e3; background: #101113; font: 12px/1.55 ui-monospace, monospace; }
 .memory-actions { display: flex; gap: 8px; }
 .memory-actions button { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: #e6e7e9; background: #303238; }
@@ -398,6 +394,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .permission-panel p { margin: 4px 0 0; color: var(--muted); font: 12px ui-monospace, monospace; }
 .permission-actions { display: flex; gap: 8px; }
 .permission-actions button { border-radius: 8px; padding: 8px 11px; }
+.permission-actions button:disabled { cursor: wait; opacity: .55; }
+.permission-submitting { align-self: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .permission-button { border: 1px solid #55585f; color: #e6e7e9; background: #303238; }
 @keyframes permission-slide-in { from { opacity: 0; transform: translateX(-18px) translateY(8px); } to { opacity: 1; transform: translateX(0) translateY(0); } }
 .buddy-toggle { margin: 8px 12px; width: calc(100% - 24px); padding: 7px 10px; border: 1px solid #3a3d46; border-radius: 7px; background: #202229; color: #e8e9ed; text-align: left; cursor: pointer; font-size: 12px; }

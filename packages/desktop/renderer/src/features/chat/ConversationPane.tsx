@@ -30,6 +30,7 @@ type MessageTimelineItem = {
   type: 'message'
   id: string
   timestamp: number
+  displayOrder: number
   index: number
   message: DesktopMessage
 }
@@ -38,6 +39,7 @@ type ToolTimelineItem = {
   type: 'tool'
   id: string
   timestamp: number
+  displayOrder: number
   index: number
   tool: DesktopToolCall
 }
@@ -64,6 +66,8 @@ export function getConversationTimeline(
     type: 'message' as const,
     id: `message:${id}`,
     timestamp: session.messages[id]?.createdAt ?? Number.MAX_SAFE_INTEGER,
+    displayOrder:
+      session.messages[id]?.displayOrder ?? Number.MAX_SAFE_INTEGER,
     index,
     message: session.messages[id]!,
   }))
@@ -74,6 +78,8 @@ export function getConversationTimeline(
       session.tools[id]?.startedAt ??
       session.tools[id]?.completedAt ??
       Number.MAX_SAFE_INTEGER,
+    displayOrder:
+      session.tools[id]?.displayOrder ?? Number.MAX_SAFE_INTEGER,
     index: session.messageOrder.length + index,
     tool: session.tools[id]!,
   }))
@@ -81,7 +87,9 @@ export function getConversationTimeline(
     .filter(item => (item.type === 'message' ? item.message : item.tool))
     .sort(
       (left, right) =>
-        left.timestamp - right.timestamp || left.index - right.index,
+        left.displayOrder - right.displayOrder ||
+        left.timestamp - right.timestamp ||
+        left.index - right.index,
     )
 }
 
@@ -123,45 +131,10 @@ export function groupConversationTimeline(
   return groups
 }
 
-function toolPath(tool: DesktopToolCall): string | null {
-  const diff = buildEditDiff(tool)
-  if (diff?.path) return diff.path
-  if (typeof tool.input !== 'object' || tool.input === null) return null
-  const value = (tool.input as Record<string, unknown>).file_path ??
-    (tool.input as Record<string, unknown>).path
-  return typeof value === 'string' ? value : null
-}
-
-function activeToolLabel(name: string): string {
-  const normalized = name.toLowerCase()
-  if (normalized.includes('edit')) return '编辑中'
-  if (normalized.includes('write')) return '写入中'
-  if (normalized.includes('read')) return '读取中'
-  if (normalized.includes('bash') || normalized.includes('shell')) return '命令执行中'
-  if (normalized.includes('grep') || normalized.includes('glob')) return '搜索中'
-  return `${toolDisplayMeta(name).label}中`
-}
-
-function activeToolCountLabel(items: ToolTimelineItem[]): string {
-  const paths = new Set(
-    items
-      .map(item => toolPath(item.tool))
-      .filter((path): path is string => Boolean(path)),
-  )
-  if (paths.size > 0) return `${paths.size} 个文件`
-  return `${items.length} 个调用`
-}
-
 function conversationToolIsVisible(
-  session: RendererSession,
+  _session: RendererSession,
   tool: DesktopToolCall,
 ): boolean {
-  if (
-    session.generationState === 'running' ||
-    session.generationState === 'interrupting'
-  ) {
-    return true
-  }
   return tool.state === 'running' || tool.state === 'pending'
 }
 
@@ -191,9 +164,7 @@ function ToolGroup({
         <span className="tool-icon" aria-hidden="true">
           {meta.icon}
         </span>
-        <strong>{activeToolLabel(name)}</strong>
-        <span className="tool-group-count">{activeToolCountLabel(items)}</span>
-        <small>点击展开</small>
+        <strong>{meta.label}</strong>
       </summary>
       {items.map(item => (
         <ToolCallCard
@@ -222,6 +193,13 @@ export function ConversationPane({
   const stickToBottom = useRef(true)
   const timeline = getVisibleConversationTimeline(session)
   const groups = groupConversationTimeline(timeline)
+  const lastUserIndex = timeline.findLastIndex(
+    item => item.type === 'message' && item.message.role === 'user',
+  )
+  const thinkingMetaMessageId = timeline.slice(lastUserIndex + 1).find(
+    item => item.type === 'message' &&
+      (item.message.kind === 'thinking' || item.message.kind === 'redacted_thinking'),
+  )?.id
   const workspaceMissing = session.cwd.trim() === '.' || session.cwd.trim() === ''
 
   useEffect(() => {
@@ -276,7 +254,11 @@ export function ConversationPane({
           }
           const item = group.item
           return item.type === 'message' ? (
-            <MessageRow key={group.key} message={item.message} />
+            <MessageRow
+              key={group.key}
+              message={item.message}
+              showThinkingMeta={item.id === thinkingMetaMessageId}
+            />
           ) : (
             <ToolGroup
               key={group.key}

@@ -20,5 +20,7 @@ describe('PermissionPanel', () => {
     expect(html).toContain('Bash 请求权限')
     expect(html).toContain('允许一次')
     expect(html).not.toContain('本会话允许')
+    expect(html).toContain('<form class="permission-actions"')
+    expect(html).toContain('name="decision"')
   })
 })

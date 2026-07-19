@@ -161,9 +161,14 @@ export function App(): React.ReactNode {
         setConnectionTest(event.result)
         return
       }
-      if (event.type === 'memory.loaded' || event.type === 'memory.saved') {
+      if (event.type === 'memory.loaded') {
         setMemoryFile(event.file)
         setCompactSummary(null)
+        return
+      }
+      if (event.type === 'memory.saved') {
+        setMemoryFile(event.file)
+        setCompactSummary('记忆已保存。')
         return
       }
       if (event.type === 'memory.compacted') {
@@ -422,9 +427,6 @@ export function App(): React.ReactNode {
             selectedPath={selectedFilePath}
             fileContent={fileContent}
             onOpen={openFile}
-            onSave={(path, content) =>
-              window.desktopApi.writeFile(path, content, selected.cwd)
-            }
           />
         ) : null
       }

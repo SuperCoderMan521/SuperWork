@@ -32,6 +32,9 @@ export type {
   DesktopSessionSummary,
   DesktopSettings,
   DesktopToolCall,
+  DesktopTokenUsage,
+  DesktopModelPricing,
+  DesktopTurnUsageReport,
   PermissionDecision,
   PermissionMode,
 } from './types.js'

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { WorkspaceEditor } from '../../../../electron/workspace-editor-service.js'
 import type {
   DesktopFileEntry,
   DesktopToolCall,
@@ -173,32 +174,166 @@ function FileViewer({
   )
 }
 
+export function WorkspaceEditorMenu({
+  status,
+  editors,
+  openingId,
+  error,
+  onOpen,
+  onRefresh,
+}: {
+  status: 'loading' | 'ready' | 'opening' | 'error'
+  editors: WorkspaceEditor[]
+  openingId: string | null
+  error: string | null
+  onOpen: (editorId: string) => void
+  onRefresh: () => void
+}): React.ReactNode {
+  return (
+    <div className="workspace-editor-menu" role="menu">
+      <div className="workspace-editor-menu-title">打开工作区</div>
+      {status === 'loading' && editors.length === 0 ? (
+        <div className="workspace-editor-menu-status">正在检测编辑器…</div>
+      ) : editors.length === 0 ? (
+        <div className="workspace-editor-menu-status">未检测到支持的编辑器</div>
+      ) : (
+        editors.map(editor => (
+          <button
+            key={editor.id}
+            type="button"
+            role="menuitem"
+            disabled={status === 'opening'}
+            onClick={() => onOpen(editor.id)}
+          >
+            <span className={`workspace-editor-icon editor-icon-${editor.icon}`} aria-hidden="true" />
+            <span>{editor.name}</span>
+            {openingId === editor.id ? <small>正在打开…</small> : null}
+          </button>
+        ))
+      )}
+      {error ? <div className="workspace-editor-error">{error}</div> : null}
+      <button className="workspace-editor-refresh" type="button" onClick={onRefresh}>
+        重新检测
+      </button>
+    </div>
+  )
+}
+
 export function ConversationFilesPanel({
   files,
   selectedPath,
   fileContent,
   onOpen,
+  workspace,
+  onListWorkspaceEditors,
+  onOpenWorkspaceInEditor,
 }: {
   files: ConversationFileEntry[]
   selectedPath: string | null
   fileContent: string | null
   onOpen: (path: string) => void
+  workspace?: string
+  onListWorkspaceEditors?: (refresh: boolean) => Promise<WorkspaceEditor[]>
+  onOpenWorkspaceInEditor?: (editorId: string, workspace: string) => Promise<void>
 }): React.ReactNode {
   const [draft, setDraft] = useState(fileContent ?? '')
   const selected = useMemo(
     () => files.find(file => file.path === selectedPath) ?? null,
     [files, selectedPath],
   )
+  const editorMenuRef = useRef<HTMLDivElement>(null)
+  const [editorMenuOpen, setEditorMenuOpen] = useState(false)
+  const [editorStatus, setEditorStatus] = useState<'loading' | 'ready' | 'opening' | 'error'>('loading')
+  const [editors, setEditors] = useState<WorkspaceEditor[]>([])
+  const [openingEditorId, setOpeningEditorId] = useState<string | null>(null)
+  const [editorError, setEditorError] = useState<string | null>(null)
 
   useEffect(() => {
     setDraft(fileContent ?? '')
   }, [fileContent, selectedPath])
 
+  useEffect(() => {
+    if (!editorMenuOpen) return
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (!editorMenuRef.current?.contains(event.target as Node)) setEditorMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEditorMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnPointerDown)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointerDown)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [editorMenuOpen])
+
+  const refreshEditors = async () => {
+    if (!onListWorkspaceEditors) return
+    setEditorStatus('loading')
+    setEditorError(null)
+    try {
+      setEditors(await onListWorkspaceEditors(true))
+      setEditorStatus('ready')
+    } catch (error) {
+      setEditorStatus('error')
+      setEditorError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const toggleEditorMenu = () => {
+    const nextOpen = !editorMenuOpen
+    setEditorMenuOpen(nextOpen)
+    if (nextOpen) void refreshEditors()
+  }
+
+  const openWorkspace = async (editorId: string) => {
+    if (!workspace || !onOpenWorkspaceInEditor) return
+    setEditorStatus('opening')
+    setOpeningEditorId(editorId)
+    setEditorError(null)
+    try {
+      await onOpenWorkspaceInEditor(editorId, workspace)
+      setEditorMenuOpen(false)
+      setEditorStatus('ready')
+    } catch (error) {
+      setEditorStatus('error')
+      setEditorError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setOpeningEditorId(null)
+    }
+  }
+
   return (
     <aside className="files-panel files-panel-wide">
       <header>
         <h2>文件</h2>
-        <span>{files.length}</span>
+        <div className="files-panel-actions">
+          <span>{files.length}</span>
+          {workspace && onListWorkspaceEditors && onOpenWorkspaceInEditor ? (
+            <div className="workspace-editor-picker" ref={editorMenuRef}>
+              <button
+                className="workspace-editor-trigger"
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={editorMenuOpen}
+                onClick={toggleEditorMenu}
+              >
+                在编辑器中打开 <span aria-hidden="true">⌄</span>
+              </button>
+              {editorMenuOpen ? (
+                <WorkspaceEditorMenu
+                  status={editorStatus}
+                  editors={editors}
+                  openingId={openingEditorId}
+                  error={editorError}
+                  onOpen={editorId => void openWorkspace(editorId)}
+                  onRefresh={() => void refreshEditors()}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </header>
       {files.length === 0 ? (
         <p className="empty-hint">当前对话还没有产生文件。</p>

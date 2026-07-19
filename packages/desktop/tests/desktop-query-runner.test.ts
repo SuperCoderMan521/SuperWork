@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import type { Command } from 'src/types/command.js'
+import type { CanUseToolFn } from 'src/hooks/useCanUseTool.js'
+import { getEmptyToolPermissionContext } from 'src/Tool.js'
+import type { AppState } from 'src/state/AppStateStore.js'
+import { getDefaultAppState } from 'src/state/AppStateStore.js'
 import {
+  createDesktopCanUseTool,
   desktopSlashFallback,
   nextResultWithTimeout,
   subscribeInterrupt,
   toCorePermissionDecision,
 } from '../core/desktop-query-runner.js'
+import { PermissionBroker } from '../core/permission-broker.js'
 
 function localJsxCommand(name: string, description: string): Command {
   return {
@@ -113,5 +119,96 @@ describe('nextResultWithTimeout', () => {
     ).rejects.toThrow('首包等待超时')
 
     expect(timedOut).toBe(1)
+  })
+})
+
+describe('createDesktopCanUseTool', () => {
+  test('reuses allow_session rules before showing another desktop permission prompt', async () => {
+    const appState = getDefaultAppState()
+    appState.toolPermissionContext = {
+      ...getEmptyToolPermissionContext(),
+      alwaysAllowRules: { session: ['Read'] },
+    }
+    const requests: string[] = []
+    const broker = new PermissionBroker({
+      emit: request => requests.push(request.id),
+    })
+    const checkPermissions: CanUseToolFn = async () => ({
+      behavior: 'allow',
+      updatedInput: { file_path: 'README.md' },
+      decisionReason: {
+        type: 'rule',
+        rule: {
+          source: 'session',
+          ruleBehavior: 'allow',
+          ruleValue: { toolName: 'Read' },
+        },
+      },
+    })
+    const canUseTool = createDesktopCanUseTool({
+      sessionId: 'session-1',
+      appState,
+      permissionBroker: broker,
+      checkPermissions,
+    })
+
+    const result = await canUseTool(
+      {
+        name: 'Read',
+        inputSchema: { parse: (input: Record<string, unknown>) => input },
+      } as never,
+      { file_path: 'README.md' },
+      {
+        getAppState: () => appState,
+        setAppState: (updater: (prev: AppState) => AppState) =>
+          Object.assign(appState, updater(appState)),
+      } as never,
+      {} as never,
+      'tool-1',
+    )
+
+    expect(result.behavior).toBe('allow')
+    expect(requests).toEqual([])
+  })
+
+  test('stores a session allow rule after the desktop permission prompt is approved for the session', async () => {
+    const appState = getDefaultAppState()
+    appState.toolPermissionContext = getEmptyToolPermissionContext()
+    const broker = new PermissionBroker({
+      createId: () => 'permission-1',
+      emit: request => {
+        queueMicrotask(() => broker.resolve(request.id, 'allow_session'))
+      },
+    })
+    const checkPermissions: CanUseToolFn = async () => ({
+      behavior: 'ask',
+      message: 'Read requires approval',
+    })
+    const canUseTool = createDesktopCanUseTool({
+      sessionId: 'session-1',
+      appState,
+      permissionBroker: broker,
+      checkPermissions,
+    })
+
+    const result = await canUseTool(
+      {
+        name: 'Read',
+        inputSchema: { parse: (input: Record<string, unknown>) => input },
+      } as never,
+      { file_path: 'README.md' },
+      {
+        getAppState: () => appState,
+        setAppState: (updater: (prev: AppState) => AppState) =>
+          Object.assign(appState, updater(appState)),
+      } as never,
+      {} as never,
+      'tool-1',
+    )
+
+    expect(result.behavior).toBe('allow')
+    expect(appState.toolPermissionContext.alwaysAllowRules.session).toEqual([
+      'Read',
+    ])
   })
 })

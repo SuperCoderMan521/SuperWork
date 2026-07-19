@@ -58,6 +58,7 @@ function emptySession(id: string): RendererSession {
     messageOrder: [],
     tools: {},
     toolOrder: [],
+    turnUsageReports: [],
     permissions: {},
     permissionOrder: [],
     generationState: 'idle',
@@ -69,6 +70,7 @@ function emptySession(id: string): RendererSession {
 function normalizeSession(session: DesktopSession): RendererSession {
   return {
     ...session,
+    turnUsageReports: session.turnUsageReports ?? [],
     messages: Object.fromEntries(session.messages.map(message => [message.id, message])),
     messageOrder: session.messages.map(message => message.id),
     tools: Object.fromEntries(session.tools.map(tool => [tool.id, tool])),
@@ -162,6 +164,17 @@ function updateSession(
         toolOrder: exists ? session.toolOrder : [...session.toolOrder, event.tool.id],
         permissions,
         permissionOrder,
+      }
+      break
+    }
+    case 'turn.usage.completed': {
+      const reports = session.turnUsageReports ?? []
+      const exists = reports.some(report => report.id === event.report.id)
+      session = {
+        ...session,
+        turnUsageReports: exists
+          ? reports.map(report => report.id === event.report.id ? event.report : report)
+          : [...reports, event.report],
       }
       break
     }

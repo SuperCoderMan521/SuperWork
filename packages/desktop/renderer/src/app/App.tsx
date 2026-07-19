@@ -427,6 +427,13 @@ export function App(): React.ReactNode {
             selectedPath={selectedFilePath}
             fileContent={fileContent}
             onOpen={openFile}
+            workspace={selected.cwd}
+            onListWorkspaceEditors={refresh =>
+              window.desktopApi.listWorkspaceEditors(refresh)
+            }
+            onOpenWorkspaceInEditor={(editorId, workspace) =>
+              window.desktopApi.openWorkspaceInEditor(editorId, workspace)
+            }
           />
         ) : null
       }

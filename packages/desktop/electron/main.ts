@@ -7,6 +7,8 @@ import {
   DESKTOP_EVENT_CHANNEL,
   DESKTOP_LOG_FOLDER_OPEN_CHANNEL,
   DESKTOP_WORKSPACE_SELECT_CHANNEL,
+  DESKTOP_WORKSPACE_EDITORS_LIST_CHANNEL,
+  DESKTOP_WORKSPACE_EDITOR_OPEN_CHANNEL,
 } from './channels.js'
 import { createApplicationMenuTemplate } from './app-menu.js'
 import { DesktopLogger } from './desktop-logger.js'
@@ -15,10 +17,12 @@ import { createNodeSidecarFactory } from './node-sidecar-process.js'
 import { resolveSidecar } from './resolve-sidecar.js'
 import { SidecarManager } from './sidecar-manager.js'
 import { createWindowOptions } from './window-options.js'
+import { WorkspaceEditorService } from './workspace-editor-service.js'
 
 let mainWindow: BrowserWindow | null = null
 let sidecar: SidecarManager | null = null
 let diagnostics: DiagnosticsService | null = null
+const workspaceEditors = new WorkspaceEditorService()
 
 app.setName('SuperWork')
 app.setPath('userData', join(app.getPath('appData'), 'SuperWork'))
@@ -181,6 +185,28 @@ ipcMain.handle(DESKTOP_WORKSPACE_SELECT_CHANNEL, async () => {
   })
   return result.canceled ? null : (result.filePaths[0] ?? null)
 })
+ipcMain.handle(
+  DESKTOP_WORKSPACE_EDITORS_LIST_CHANNEL,
+  (_event, value: unknown) => {
+    const refresh =
+      typeof value === 'object' && value !== null &&
+      (value as Record<string, unknown>).refresh === true
+    return workspaceEditors.list({ refresh })
+  },
+)
+ipcMain.handle(
+  DESKTOP_WORKSPACE_EDITOR_OPEN_CHANNEL,
+  async (_event, value: unknown) => {
+    if (typeof value !== 'object' || value === null) {
+      throw new Error('Invalid editor open request')
+    }
+    const input = value as Record<string, unknown>
+    if (typeof input.editorId !== 'string' || typeof input.workspace !== 'string') {
+      throw new Error('Invalid editor open request')
+    }
+    await workspaceEditors.open(input.editorId, input.workspace)
+  },
+)
 
 app.whenReady().then(() => {
   console.log('[electron-main] app ready, creating window + sidecar')

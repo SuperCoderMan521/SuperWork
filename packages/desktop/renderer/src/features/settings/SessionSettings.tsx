@@ -46,11 +46,28 @@ export function SessionSettings({
     baseUrl: modelConfig?.baseUrl,
     token: modelConfig?.token,
     model: modelConfig?.model,
+    pricing: modelConfig?.pricing,
   })
   const updateConfig = (patch: Partial<DesktopModelConfig>) => {
     onModelConfigChange?.({
       ...currentConfig(),
       ...patch,
+    })
+  }
+  const updatePrice = (
+    key: Exclude<keyof NonNullable<DesktopModelConfig['pricing']>, 'currency'>,
+    value: string,
+  ) => {
+    const parsed = Number(value)
+    updateConfig({
+      pricing: {
+        currency: 'USD',
+        perMillionInputTokens: modelConfig?.pricing?.perMillionInputTokens ?? 0,
+        perMillionOutputTokens: modelConfig?.pricing?.perMillionOutputTokens ?? 0,
+        perMillionCacheCreationTokens: modelConfig?.pricing?.perMillionCacheCreationTokens ?? 0,
+        perMillionCacheReadTokens: modelConfig?.pricing?.perMillionCacheReadTokens ?? 0,
+        [key]: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0,
+      },
     })
   }
 
@@ -154,6 +171,27 @@ export function SessionSettings({
             </span>
           ) : null}
         </div>
+        <fieldset className="pricing-config">
+          <legend>Token 价格（USD / 1M Tokens）</legend>
+          {([
+            ['perMillionInputTokens', '输入价格'],
+            ['perMillionOutputTokens', '输出价格'],
+            ['perMillionCacheCreationTokens', '缓存写入价格'],
+            ['perMillionCacheReadTokens', '缓存读取价格'],
+          ] as const).map(([key, label]) => (
+            <label key={key}>
+              <span>{label}</span>
+              <input
+                aria-label={label}
+                type="number"
+                min="0"
+                step="0.0001"
+                value={modelConfig?.pricing?.[key] ?? 0}
+                onChange={event => updatePrice(key, event.target.value)}
+              />
+            </label>
+          ))}
+        </fieldset>
       </section>
     </div>
   )

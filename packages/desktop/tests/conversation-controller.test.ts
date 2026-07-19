@@ -31,6 +31,7 @@ describe('DesktopConversationController', () => {
       'message.added',
       'generation.state',
       'message.added',
+      'turn.usage.completed',
       'generation.state',
     ])
     expect(controller.getSession(session.id)?.generationState).toBe('idle')

@@ -6,6 +6,7 @@ import type {
   PermissionDecision,
   PermissionMode,
 } from '../shared/protocol.js'
+import type { WorkspaceEditor } from './workspace-editor-service.js'
 
 export type DesktopEventListener = (event: DesktopEvent) => void
 export type DesktopEventSubscriber = (
@@ -39,12 +40,16 @@ export type DesktopApi = {
   getDiagnostics(): Promise<DiagnosticsSnapshot>
   openLogFolder(): Promise<void>
   selectWorkspace(): Promise<string | null>
+  listWorkspaceEditors(refresh?: boolean): Promise<WorkspaceEditor[]>
+  openWorkspaceInEditor(editorId: string, workspace: string): Promise<void>
 }
 
 type DiagnosticsApi = {
   get: () => Promise<DiagnosticsSnapshot>
   openFolder: () => Promise<void>
   selectWorkspace?: () => Promise<string | null>
+  listWorkspaceEditors?: (refresh: boolean) => Promise<WorkspaceEditor[]>
+  openWorkspaceInEditor?: (editorId: string, workspace: string) => Promise<void>
 }
 
 const unavailableDiagnostics: DiagnosticsApi = {
@@ -118,5 +123,10 @@ export function createDesktopApi(
     getDiagnostics: diagnostics.get,
     openLogFolder: diagnostics.openFolder,
     selectWorkspace: diagnostics.selectWorkspace ?? (() => Promise.resolve(null)),
+    listWorkspaceEditors: refresh =>
+      diagnostics.listWorkspaceEditors?.(Boolean(refresh)) ?? Promise.resolve([]),
+    openWorkspaceInEditor: (editorId, workspace) =>
+      diagnostics.openWorkspaceInEditor?.(editorId, workspace) ??
+      Promise.reject(new Error('Workspace editor API is unavailable')),
   })
 }

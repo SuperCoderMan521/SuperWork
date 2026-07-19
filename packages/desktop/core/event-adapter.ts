@@ -1,4 +1,18 @@
-import type { DesktopEvent, DesktopToolCall } from '../shared/protocol.js'
+import type {
+  DesktopEvent,
+  DesktopModelConfig,
+  DesktopTokenUsage,
+  DesktopToolCall,
+} from '../shared/protocol.js'
+import {
+  addUsage,
+  EMPTY_DESKTOP_USAGE,
+  hasUsage,
+  mergeCallUsage,
+  providerAndModel,
+  tokenUsage,
+  usageCostUsd,
+} from './turn-usage.js'
 
 type UnknownRecord = Record<string, unknown>
 type SessionEvent = Extract<
@@ -41,18 +55,27 @@ export class DesktopEventAdapter {
   private readonly tools = new Map<string, DesktopToolCall>()
   private hasStreamingText = false
   private hasAssistantOutput = false
+  private currentUsage: DesktopTokenUsage = { ...EMPTY_DESKTOP_USAGE }
+  private totalUsage: DesktopTokenUsage = { ...EMPTY_DESKTOP_USAGE }
+  private apiCalls = 0
+  private finalized = false
+  private anchorMessageId: string | undefined
 
   constructor(
     private readonly sessionId: string,
     private readonly now: () => number = Date.now,
     initialSequence = 0,
     private readonly emitRequestState = true,
+    private readonly modelConfig?: DesktopModelConfig,
+    private readonly startedAt = now(),
   ) {
     this.sequence = initialSequence
   }
 
   consume(value: unknown): SessionEvent[] {
     if (!isRecord(value)) return []
+
+    this.captureUsage(value)
 
     if (value.type === 'stream_request_start') {
       if (!this.emitRequestState) return []
@@ -61,27 +84,31 @@ export class DesktopEventAdapter {
 
     if (value.type === 'result') {
       const result = stringProperty(value, 'result')
-      if (this.hasAssistantOutput) return []
-      if (!result) return []
-      return [
-        this.sessionEvent({
+      const events: SessionEvent[] = []
+      if (!this.hasAssistantOutput && result) {
+        const messageId = `result-${this.sequence + 1}`
+        this.anchorMessageId = messageId
+        events.push(this.sessionEvent({
           type: 'message.added',
           message: {
-            id: `result-${this.sequence + 1}`,
+            id: messageId,
             role: 'assistant',
             kind: 'text',
             content: result,
             createdAt: this.now(),
             displayOrder: this.nextDisplayOrder(),
           },
-        }),
-      ]
+        }))
+      }
+      const status = value.is_error === true ? 'failed' : 'completed'
+      return [...events, ...this.complete(status)]
     }
 
     const delta = this.textDelta(value)
     if (delta !== undefined) {
       this.hasStreamingText = true
       this.hasAssistantOutput = true
+      this.anchorMessageId = 'streaming-assistant'
       return [
         this.sessionEvent({
           type: 'message.delta',
@@ -149,8 +176,54 @@ export class DesktopEventAdapter {
     })
     if (events.some(event => event.type === 'message.added')) {
       this.hasAssistantOutput = true
+      const lastMessage = [...events].reverse().find(event => event.type === 'message.added')
+      if (lastMessage?.type === 'message.added') this.anchorMessageId = lastMessage.message.id
     }
     return events
+  }
+
+  complete(status: 'completed' | 'interrupted' | 'failed'): SessionEvent[] {
+    if (this.finalized) return []
+    this.finalized = true
+    this.finishCurrentCall()
+    const { provider, model } = providerAndModel(this.modelConfig, 'default')
+    return [this.sessionEvent({
+      type: 'turn.usage.completed',
+      report: {
+        id: `usage-${this.sessionId}-${this.sequence + 1}`,
+        anchorMessageId: this.anchorMessageId,
+        status,
+        provider,
+        model,
+        usage: this.totalUsage,
+        apiCalls: this.apiCalls,
+        costUsd: usageCostUsd(this.totalUsage, this.modelConfig?.pricing),
+        durationMs: Math.max(0, this.now() - this.startedAt),
+        completedAt: this.now(),
+        displayOrder: this.sequence + 1,
+      },
+    })]
+  }
+
+  private captureUsage(value: UnknownRecord): void {
+    if (value.type !== 'stream_event' || !isRecord(value.event)) return
+    const event = value.event
+    if (event.type === 'message_start') {
+      this.currentUsage = { ...EMPTY_DESKTOP_USAGE }
+      const message = isRecord(event.message) ? event.message : null
+      this.currentUsage = mergeCallUsage(this.currentUsage, tokenUsage(message?.usage))
+    } else if (event.type === 'message_delta') {
+      this.currentUsage = mergeCallUsage(this.currentUsage, tokenUsage(event.usage))
+    } else if (event.type === 'message_stop') {
+      this.finishCurrentCall()
+    }
+  }
+
+  private finishCurrentCall(): void {
+    if (!hasUsage(this.currentUsage)) return
+    this.totalUsage = addUsage(this.totalUsage, this.currentUsage)
+    this.apiCalls += 1
+    this.currentUsage = { ...EMPTY_DESKTOP_USAGE }
   }
 
   private textDelta(value: UnknownRecord): string | undefined {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type {
   DesktopEvent,
+  DesktopModelConfig,
   DesktopPermissionRequest,
   DesktopSession,
   PermissionMode,
@@ -26,6 +27,7 @@ type ConversationControllerOptions = {
   defaultModel: string
   defaultMode: PermissionMode
   onInterrupt?: (sessionId: string) => void
+  getModelConfig?: (cwd: string) => Promise<DesktopModelConfig | undefined>
 }
 
 type ActiveGeneration = {
@@ -62,6 +64,7 @@ export class DesktopConversationController {
       mode: this.options.defaultMode,
       messages: [],
       tools: [],
+      turnUsageReports: [],
       generationState: 'idle',
       sequence: 0,
     }
@@ -112,11 +115,15 @@ export class DesktopConversationController {
     session.generationState = 'running'
     this.emitSession(session, { type: 'generation.state', state: 'running' })
 
+    const modelConfig = this.options.getModelConfig
+      ? await this.options.getModelConfig(session.cwd)
+      : undefined
     const adapter = new DesktopEventAdapter(
       sessionId,
       this.now,
       session.sequence,
       false,
+      modelConfig,
     )
 
     try {
@@ -137,19 +144,47 @@ export class DesktopConversationController {
           session.sequence = event.sequence
           if (event.type === 'message.added') session.messages.push(event.message)
           if (event.type === 'tool.updated') this.updateTool(session, event.tool)
+          if (event.type === 'turn.usage.completed') {
+            const reports = session.turnUsageReports ?? []
+            const existing = reports.findIndex(report => report.id === event.report.id)
+            if (existing === -1) reports.push(event.report)
+            else reports[existing] = event.report
+            session.turnUsageReports = reports
+          }
           if (event.type === 'generation.state') {
             session.generationState = event.state
           }
           this.options.emit(event)
         }
       }
+      for (const event of adapter.complete(abortController.signal.aborted ? 'interrupted' : 'completed')) {
+        session.sequence = event.sequence
+        if (event.type === 'turn.usage.completed') {
+          session.turnUsageReports = [...(session.turnUsageReports ?? []), event.report]
+        }
+        this.options.emit(event)
+      }
       session.generationState = 'idle'
       this.emitSession(session, { type: 'generation.state', state: 'idle' })
     } catch (error) {
       if (abortController.signal.aborted && !isFirstEventTimeout(error)) {
+        for (const event of adapter.complete('interrupted')) {
+          session.sequence = event.sequence
+          if (event.type === 'turn.usage.completed') {
+            session.turnUsageReports = [...(session.turnUsageReports ?? []), event.report]
+          }
+          this.options.emit(event)
+        }
         session.generationState = 'idle'
         this.emitSession(session, { type: 'generation.state', state: 'idle' })
       } else {
+        for (const event of adapter.complete('failed')) {
+          session.sequence = event.sequence
+          if (event.type === 'turn.usage.completed') {
+            session.turnUsageReports = [...(session.turnUsageReports ?? []), event.report]
+          }
+          this.options.emit(event)
+        }
         session.generationState = 'failed'
         this.emitSession(session, { type: 'generation.state', state: 'failed' })
         throw error

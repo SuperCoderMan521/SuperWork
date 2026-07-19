@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type {
   DesktopMessage,
   DesktopToolCall,
+  DesktopTurnUsageReport,
   PermissionDecision,
 } from '../../../../shared/protocol.js'
 import type { RendererSession } from '../../app/reducer.js'
@@ -9,6 +10,7 @@ import { PermissionPanel } from '../permissions/PermissionPanel.js'
 import { Composer } from './Composer.js'
 import { MessageRow } from './MessageRow.js'
 import { ToolCallCard } from './ToolCallCard.js'
+import { TurnUsageReport } from './TurnUsageReport.js'
 import { buildEditDiff, toolDisplayMeta } from './toolRendering.js'
 
 type ConversationPaneProps = {
@@ -44,7 +46,16 @@ type ToolTimelineItem = {
   tool: DesktopToolCall
 }
 
-export type ConversationTimelineItem = MessageTimelineItem | ToolTimelineItem
+type UsageTimelineItem = {
+  type: 'usage'
+  id: string
+  timestamp: number
+  displayOrder: number
+  index: number
+  report: DesktopTurnUsageReport
+}
+
+export type ConversationTimelineItem = MessageTimelineItem | ToolTimelineItem | UsageTimelineItem
 
 export type ConversationTimelineGroup =
   | {
@@ -83,8 +94,16 @@ export function getConversationTimeline(
     index: session.messageOrder.length + index,
     tool: session.tools[id]!,
   }))
-  return [...messages, ...tools]
-    .filter(item => (item.type === 'message' ? item.message : item.tool))
+  const reports = (session.turnUsageReports ?? []).map((report, index) => ({
+    type: 'usage' as const,
+    id: `usage:${report.id}`,
+    timestamp: report.completedAt,
+    displayOrder: report.displayOrder ?? Number.MAX_SAFE_INTEGER - session.turnUsageReports!.length + index,
+    index: session.messageOrder.length + session.toolOrder.length + index,
+    report,
+  }))
+  return [...messages, ...tools, ...reports]
+    .filter(item => item.type === 'message' ? item.message : item.type === 'tool' ? item.tool : item.report)
     .sort(
       (left, right) =>
         left.displayOrder - right.displayOrder ||
@@ -142,10 +161,45 @@ function getVisibleConversationTimeline(
   session: RendererSession,
 ): ConversationTimelineItem[] {
   return getConversationTimeline(session).filter(item =>
-    item.type === 'message'
+    item.type === 'message' || item.type === 'usage'
       ? true
       : conversationToolIsVisible(session, item.tool),
   )
+}
+
+function toolInputString(
+  tool: DesktopToolCall,
+  keys: readonly string[],
+): string | null {
+  if (typeof tool.input !== 'object' || tool.input === null) return null
+  const input = tool.input as Record<string, unknown>
+  for (const key of keys) {
+    const value = input[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function toolPath(tool: DesktopToolCall): string | null {
+  return buildEditDiff(tool)?.path ?? toolInputString(tool, ['file_path', 'path'])
+}
+
+function toolOperationSummary(tool: DesktopToolCall): string {
+  return (
+    toolPath(tool) ??
+    toolInputString(tool, ['command', 'query', 'pattern', 'glob', 'url']) ??
+    tool.summary?.trim() ??
+    toolDisplayMeta(tool.name).label
+  )
+}
+
+function activeToolSummary(items: ToolTimelineItem[]): string {
+  const active =
+    [...items]
+      .reverse()
+      .find(item => item.tool.state === 'running' || item.tool.state === 'pending') ??
+    items.at(-1)
+  return active ? toolOperationSummary(active.tool) : ''
 }
 
 function ToolGroup({
@@ -165,6 +219,9 @@ function ToolGroup({
           {meta.icon}
         </span>
         <strong>{meta.label}</strong>
+        <span className="tool-group-description" title={activeToolSummary(items)}>
+          {activeToolSummary(items)}
+        </span>
       </summary>
       {items.map(item => (
         <ToolCallCard
@@ -259,6 +316,8 @@ export function ConversationPane({
               message={item.message}
               showThinkingMeta={item.id === thinkingMetaMessageId}
             />
+          ) : item.type === 'usage' ? (
+            <TurnUsageReport key={group.key} report={item.report} />
           ) : (
             <ToolGroup
               key={group.key}

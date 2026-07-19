@@ -47,6 +47,35 @@ export const DesktopMessageSchema = z.object({
   displayOrder: z.number().int().nonnegative().optional(),
 })
 
+export const DesktopTokenUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheCreationInputTokens: z.number().int().nonnegative(),
+  cacheReadInputTokens: z.number().int().nonnegative(),
+})
+
+export const DesktopModelPricingSchema = z.object({
+  currency: z.literal('USD').default('USD'),
+  perMillionInputTokens: z.number().nonnegative(),
+  perMillionOutputTokens: z.number().nonnegative(),
+  perMillionCacheCreationTokens: z.number().nonnegative(),
+  perMillionCacheReadTokens: z.number().nonnegative(),
+})
+
+export const DesktopTurnUsageReportSchema = z.object({
+  id: IdSchema,
+  anchorMessageId: IdSchema.optional(),
+  status: z.enum(['completed', 'interrupted', 'failed']),
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  usage: DesktopTokenUsageSchema,
+  apiCalls: z.number().int().nonnegative(),
+  costUsd: z.number().nonnegative().optional(),
+  durationMs: z.number().int().nonnegative(),
+  completedAt: z.number().int().nonnegative(),
+  displayOrder: z.number().int().nonnegative().optional(),
+})
+
 export const DesktopToolCallSchema = z.object({
   id: IdSchema,
   name: z.string().min(1),
@@ -87,6 +116,7 @@ export const DesktopSessionSchema = DesktopSessionSummarySchema.extend({
   mode: PermissionModeSchema,
   messages: z.array(DesktopMessageSchema),
   tools: z.array(DesktopToolCallSchema),
+  turnUsageReports: z.array(DesktopTurnUsageReportSchema).optional(),
   generationState: z.enum(['idle', 'running', 'interrupting', 'failed']),
   sequence: z.number().int().nonnegative(),
 })
@@ -122,6 +152,7 @@ export const DesktopModelConfigSchema = z.object({
   baseUrl: z.string().optional(),
   token: z.string().optional(),
   model: z.string().optional(),
+  pricing: DesktopModelPricingSchema.optional(),
 })
 
 export const DesktopConfigSnapshotSchema = z.object({
@@ -255,6 +286,10 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
   SequencedSessionEventSchema.extend({
     type: z.literal('tool.updated'),
     tool: DesktopToolCallSchema,
+  }),
+  SequencedSessionEventSchema.extend({
+    type: z.literal('turn.usage.completed'),
+    report: DesktopTurnUsageReportSchema,
   }),
   SequencedSessionEventSchema.extend({
     type: z.literal('permission.requested'),

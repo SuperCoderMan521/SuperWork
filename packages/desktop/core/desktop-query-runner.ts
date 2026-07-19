@@ -4,6 +4,7 @@ import type { AppState } from 'src/state/AppStateStore.js'
 import type { Command } from 'src/types/command.js'
 import type { PermissionDecision as CorePermissionDecision } from 'src/types/permissions.js'
 import type { Message } from 'src/types/message.js'
+import { hasPermissionsToUseTool } from 'src/utils/permissions/permissions.js'
 import type { PermissionDecision } from '../shared/protocol.js'
 import type { QueryRunInput } from './conversation-controller.js'
 import { PermissionBroker } from './permission-broker.js'
@@ -26,6 +27,57 @@ type EngineState = {
   engine: QueryEngine
   appState: AppState
   commands: Command[]
+}
+
+type DesktopCanUseToolOptions = {
+  sessionId: string
+  appState: AppState
+  permissionBroker: PermissionBroker
+  checkPermissions?: CanUseToolFn
+}
+
+export function createDesktopCanUseTool({
+  sessionId,
+  appState,
+  permissionBroker,
+  checkPermissions = hasPermissionsToUseTool,
+}: DesktopCanUseToolOptions): CanUseToolFn {
+  return async (tool, toolInput, toolUseContext, assistantMessage, toolUseId) => {
+    const pipelineDecision = await checkPermissions(
+      tool,
+      toolInput,
+      toolUseContext,
+      assistantMessage,
+      toolUseId,
+    )
+    if (pipelineDecision.behavior !== 'ask') return pipelineDecision
+
+    const decision = await permissionBroker.request({
+      sessionId,
+      toolCallId: toolUseId,
+      toolName: tool.name,
+      summary: pipelineDecision.message ?? tool.name,
+      input: toolInput,
+      allowSession: true,
+    })
+    if (decision === 'allow_session') {
+      const existing =
+        appState.toolPermissionContext.alwaysAllowRules.session ?? []
+      if (!existing.includes(tool.name)) {
+        toolUseContext.setAppState(prev => ({
+          ...prev,
+          toolPermissionContext: {
+            ...prev.toolPermissionContext,
+            alwaysAllowRules: {
+              ...prev.toolPermissionContext.alwaysAllowRules,
+              session: [...existing, tool.name],
+            },
+          },
+        }))
+      }
+    }
+    return toCorePermissionDecision(decision, toolInput)
+  }
 }
 
 function parseSlashName(prompt: string): string | null {
@@ -197,29 +249,11 @@ export class DesktopQueryRunner {
     console.error(`[desktop-core] query.context_ready session=${input.session.id}`)
     appState.agentDefinitions = agentDefinitions
 
-    const canUseTool: CanUseToolFn = async (tool, toolInput, _context, _message, toolUseId) => {
-      const decision = await this.permissionBroker.request({
-        sessionId: input.session.id,
-        toolCallId: toolUseId,
-        toolName: tool.name,
-        summary: tool.name,
-        input: toolInput,
-        allowSession: true,
-      })
-      if (decision === 'allow_session') {
-        const existing = appState.toolPermissionContext.alwaysAllowRules.session ?? []
-        if (!existing.includes(tool.name)) {
-          appState.toolPermissionContext = {
-            ...appState.toolPermissionContext,
-            alwaysAllowRules: {
-              ...appState.toolPermissionContext.alwaysAllowRules,
-              session: [...existing, tool.name],
-            },
-          }
-        }
-      }
-      return toCorePermissionDecision(decision, toolInput)
-    }
+    const canUseTool = createDesktopCanUseTool({
+      sessionId: input.session.id,
+      appState,
+      permissionBroker: this.permissionBroker,
+    })
 
     const engine = new queryEngineModule.QueryEngine({
       cwd: input.session.cwd,

@@ -57,6 +57,9 @@ function modelConfigFromSettings(settings: Record<string, unknown>): DesktopMode
     model: typeof record.model === 'string' ? record.model : typeof settings.model === 'string' ? settings.model : envValue(
       prefix === 'openai' ? 'OPENAI_MODEL' : prefix === 'gemini' ? 'GEMINI_MODEL' : prefix === 'grok' ? 'GROK_MODEL' : 'ANTHROPIC_MODEL',
     ),
+    pricing: record.pricing && typeof record.pricing === 'object'
+      ? record.pricing as DesktopModelConfig['pricing']
+      : undefined,
   }
 }
 
@@ -176,6 +179,7 @@ function cleanModelConfig(modelConfig: DesktopModelConfig): DesktopModelConfig {
     const value = modelConfig[key]?.trim()
     if (value) trimmed[key] = value
   }
+  if (modelConfig.pricing) trimmed.pricing = { ...modelConfig.pricing }
   return trimmed
 }
 
@@ -418,6 +422,10 @@ export class DesktopConfigService {
       await writeJsonObject(legacyPath, settings)
     }
     return this.snapshot(cwd)
+  }
+
+  async modelConfig(cwd: string): Promise<DesktopModelConfig> {
+    return this.readModelConfig(cwd)
   }
 
   private async readModelConfig(cwd: string): Promise<DesktopModelConfig> {

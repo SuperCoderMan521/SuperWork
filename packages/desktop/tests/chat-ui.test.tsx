@@ -15,6 +15,7 @@ import {
 } from '../renderer/src/features/chat/toolRendering.js'
 import {
   ConversationFilesPanel,
+  WorkspaceEditorMenu,
   filesFromTools,
 } from '../renderer/src/features/files/ConversationFilesPanel.js'
 import {
@@ -152,6 +153,43 @@ describe('desktop chat UI', () => {
     expect(html).toContain('输入问题')
     expect(html).toContain('选择工作区')
     expect(html).toContain('aria-label="中断生成"')
+  })
+
+  test('renders a collapsed turn usage report after a completed answer', () => {
+    const html = renderToStaticMarkup(
+      <ConversationPane
+        session={{
+          ...session,
+          turnUsageReports: [{
+            id: 'usage-1',
+            anchorMessageId: 'message-1',
+            status: 'completed',
+            provider: 'anthropic',
+            model: 'sonnet',
+            usage: {
+              inputTokens: 1240,
+              outputTokens: 386,
+              cacheCreationInputTokens: 1120,
+              cacheReadInputTokens: 8420,
+            },
+            apiCalls: 2,
+            costUsd: 0.0184,
+            durationMs: 12600,
+            completedAt: 300,
+            displayOrder: 300,
+          }],
+        }}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+      />,
+    )
+    expect(html).toContain('turn-usage-report')
+    expect(html).toContain('本轮使用')
+    expect(html).toContain('11,166 tokens')
+    expect(html).toContain('缓存 78%')
+    expect(html).toContain('$0.0184')
+    expect(html).toContain('12.6s')
   })
 
   test('shows a workspace-required hint when the session has no real workspace', () => {
@@ -412,10 +450,11 @@ describe('desktop chat UI', () => {
 
     expect(html).toContain('tool-group')
     expect(html).toContain('编辑')
-    expect(html).not.toContain('tool-group-description')
+    expect(html).toContain('tool-group-description')
     expect(html).not.toContain('点击展开')
     expect(html).not.toContain('src/old.ts')
     expect(html).toContain('src/current.ts')
+    expect(html).toContain('<span class="tool-group-description" title="src/current.ts">src/current.ts</span>')
     expect(html.match(/<details/g)?.length).toBe(1)
   })
 
@@ -500,6 +539,34 @@ describe('desktop chat UI', () => {
     expect(html).toContain('src/query.ts')
     expect(html).not.toContain('保存')
     expect(html).toContain('export const ok')
+  })
+
+  test('renders installed workspace editors and editor menu states', () => {
+    const loading = renderToStaticMarkup(
+      <WorkspaceEditorMenu
+        status="loading"
+        editors={[]}
+        openingId={null}
+        error={null}
+        onOpen={() => {}}
+        onRefresh={() => {}}
+      />,
+    )
+    const ready = renderToStaticMarkup(
+      <WorkspaceEditorMenu
+        status="ready"
+        editors={[{ id: 'vscode', name: 'Visual Studio Code', icon: 'vscode' }]}
+        openingId={null}
+        error={null}
+        onOpen={() => {}}
+        onRefresh={() => {}}
+      />,
+    )
+
+    expect(loading).toContain('正在检测编辑器')
+    expect(ready).toContain('workspace-editor-menu')
+    expect(ready).toContain('Visual Studio Code')
+    expect(ready).toContain('重新检测')
   })
 
   test('renders file content with a styled code preview and roomy layout', () => {

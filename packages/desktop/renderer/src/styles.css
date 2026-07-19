@@ -204,7 +204,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 }
 .tool-group > summary::-webkit-details-marker { display: none; }
 .tool-group > summary > * { position: relative; z-index: 1; }
-.tool-group-description { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tool-group-description { min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .tool-group small { display: none; }
 .tool-group-running > summary {
   color: var(--muted);
@@ -233,6 +233,16 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .tool-group .tool-card { margin: 10px; }
 .tool-group .tool-card-expanded { margin: 0; border: 0; border-top: 1px solid #33363b; border-radius: 0; }
 .tool-group .tool-card-expanded:first-of-type { border-top: 0; }
+.turn-usage-report { margin: -6px 28px 18px 100px; border-top: 1px solid var(--border); color: var(--muted); }
+.turn-usage-report > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 2px; cursor: pointer; font-size: 12px; }
+.turn-usage-report > summary strong { color: #e8e9eb; font-weight: 500; }
+.turn-usage-icon { color: #aeb2ba; }
+.turn-usage-status { padding: 2px 7px; border-radius: 999px; background: #292b30; }
+.turn-usage-status.usage-failed { color: #efc2c8; }
+.turn-usage-details { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 8px 20px; max-width: 520px; padding: 4px 2px 12px 24px; font-size: 12px; }
+.turn-usage-details strong { color: #dfe1e5; font: 500 12px ui-monospace, monospace; text-align: right; }
+.pricing-config { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.pricing-config legend { padding: 0 6px; color: #dfe1e5; }
 @keyframes tool-text-shimmer {
   from { background-position: 120% 0; }
   to { background-position: -120% 0; }
@@ -279,6 +289,26 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .files-panel header { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border); }
 .files-panel h2 { margin: 0; font-size: 13px; }
 .files-panel header span { color: var(--muted); font-size: 12px; }
+.files-panel-actions { display: flex; align-items: center; gap: 10px; }
+.workspace-editor-picker { position: relative; }
+.workspace-editor-trigger { border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; color: #d9dadc; background: #202225; font-size: 12px; }
+.workspace-editor-trigger:hover, .workspace-editor-trigger[aria-expanded="true"] { border-color: #55585f; background: #292b2f; }
+.workspace-editor-menu { position: absolute; top: calc(100% + 7px); right: 0; z-index: 16; display: grid; width: 250px; padding: 7px; border: 1px solid #3b3d40; border-radius: 10px; background: #202225; box-shadow: 0 14px 36px rgba(0,0,0,.56); }
+.workspace-editor-menu-title { padding: 5px 8px 7px; color: var(--muted); font-size: 11px; }
+.workspace-editor-menu button { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 0; border-radius: 7px; padding: 8px; color: #dedfe1; background: transparent; text-align: left; }
+.workspace-editor-menu button:hover { background: var(--selection); }
+.workspace-editor-menu button:disabled { cursor: wait; opacity: .62; }
+.workspace-editor-menu button small { color: var(--muted); font-size: 11px; }
+.workspace-editor-icon { width: 14px; height: 14px; border-radius: 3px; background: #5769f7; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.editor-icon-cursor { background: #dedfe1; }
+.editor-icon-windsurf, .editor-icon-zed { background: #4a9f8c; }
+.editor-icon-trae { background: #7069d8; }
+.editor-icon-sublime { background: #d77757; }
+.editor-icon-notepad-plus-plus { background: #79a85a; }
+.editor-icon-idea, .editor-icon-webstorm, .editor-icon-pycharm, .editor-icon-goland, .editor-icon-rider, .editor-icon-clion, .editor-icon-phpstorm, .editor-icon-rubymine, .editor-icon-datagrip, .editor-icon-android-studio { background: #c15c8b; }
+.workspace-editor-menu-status, .workspace-editor-error { padding: 9px 8px; color: var(--muted); font-size: 12px; }
+.workspace-editor-error { color: #e3a1a7; }
+.workspace-editor-menu .workspace-editor-refresh { grid-template-columns: 1fr; margin-top: 5px; border-top: 1px solid #393b3e; border-radius: 0; color: #aeb0b4; font-size: 12px; }
 .files-panel ul { min-height: 0; overflow: auto; margin: 0; padding: 8px; list-style: none; }
 .files-panel li button { display: grid; width: 100%; gap: 3px; border: 0; border-radius: 8px; padding: 8px; color: #d9dade; background: transparent; text-align: left; }
 .files-panel li button:hover, .files-panel li button.active { background: var(--selection); }

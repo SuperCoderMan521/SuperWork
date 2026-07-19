@@ -98,6 +98,7 @@ async function main(): Promise<void> {
     emit,
     defaultModel,
     defaultMode: 'default',
+    getModelConfig: cwd => configService.modelConfig(cwd),
     onInterrupt: sessionId => {
       permissionBroker.cancelSession(sessionId)
     },

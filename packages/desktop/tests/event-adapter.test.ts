@@ -2,6 +2,71 @@ import { describe, expect, test } from 'bun:test'
 import { DesktopEventAdapter } from '../core/event-adapter.js'
 
 describe('DesktopEventAdapter', () => {
+  test('emits one priced usage report for multiple model calls', () => {
+    let now = 100
+    const adapter = new DesktopEventAdapter('session-1', () => now, 0, false, {
+      provider: 'anthropic',
+      model: 'sonnet',
+      pricing: {
+        currency: 'USD',
+        perMillionInputTokens: 3,
+        perMillionOutputTokens: 15,
+        perMillionCacheCreationTokens: 3.75,
+        perMillionCacheReadTokens: 0.3,
+      },
+    }, 0)
+    const stream = (event: unknown) => adapter.consume({ type: 'stream_event', event })
+    stream({ type: 'message_start', message: { usage: { input_tokens: 100, cache_read_input_tokens: 900 } } })
+    stream({ type: 'message_delta', usage: { output_tokens: 50 }, delta: {} })
+    stream({ type: 'message_stop' })
+    stream({ type: 'message_start', message: { usage: { input_tokens: 20, cache_creation_input_tokens: 200 } } })
+    stream({ type: 'message_delta', usage: { output_tokens: 10 }, delta: {} })
+    stream({ type: 'message_stop' })
+    now = 1200
+
+    const reportEvent = adapter.consume({ type: 'result', result: '' }).find(event => event.type === 'turn.usage.completed')
+    expect(reportEvent).toMatchObject({
+      type: 'turn.usage.completed',
+      report: {
+        provider: 'anthropic',
+        model: 'sonnet',
+        apiCalls: 2,
+        durationMs: 1200,
+        usage: {
+          inputTokens: 120,
+          outputTokens: 60,
+          cacheCreationInputTokens: 200,
+          cacheReadInputTokens: 900,
+        },
+      },
+    })
+    if (reportEvent?.type !== 'turn.usage.completed') throw new Error('missing usage report')
+    expect(reportEvent.report.costUsd).toBeGreaterThan(0)
+  })
+
+  test('keeps partial usage when a turn is interrupted before message_stop', () => {
+    let now = 1_000
+    const adapter = new DesktopEventAdapter('session-1', () => now)
+    const stream = (event: unknown) => ({ type: 'stream_event', event })
+    adapter.consume(stream({
+      type: 'message_start',
+      message: { usage: { input_tokens: 25, cache_read_input_tokens: 75 } },
+    }))
+    adapter.consume(stream({ type: 'message_delta', usage: { output_tokens: 10 }, delta: {} }))
+    now = 2_000
+
+    const [event] = adapter.complete('interrupted')
+    expect(event?.type).toBe('turn.usage.completed')
+    if (event?.type !== 'turn.usage.completed') throw new Error('missing usage report')
+    expect(event.report.status).toBe('interrupted')
+    expect(event.report.apiCalls).toBe(1)
+    expect(event.report.usage).toEqual({
+      inputTokens: 25,
+      outputTokens: 10,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 75,
+    })
+  })
   test('converts streaming text into sequenced desktop events', () => {
     const adapter = new DesktopEventAdapter('session-1', () => 100)
 
@@ -194,7 +259,7 @@ describe('DesktopEventAdapter', () => {
   test('converts local command result text into an assistant message', () => {
     const adapter = new DesktopEventAdapter('session-1', () => 100)
 
-    expect(adapter.consume({ type: 'result', result: 'Local command output' })).toEqual([
+    expect(adapter.consume({ type: 'result', result: 'Local command output' })[0]).toEqual(
       {
         type: 'message.added',
         sessionId: 'session-1',
@@ -208,7 +273,7 @@ describe('DesktopEventAdapter', () => {
           displayOrder: 1,
         },
       },
-    ])
+    )
   })
 
   test('does not duplicate the final result after assistant text was already emitted', () => {
@@ -219,6 +284,8 @@ describe('DesktopEventAdapter', () => {
       message: { content: [{ type: 'text', text: '你好！' }] },
     })
 
-    expect(adapter.consume({ type: 'result', result: '你好！' })).toEqual([])
+    expect(adapter.consume({ type: 'result', result: '你好！' }).map(event => event.type)).toEqual([
+      'turn.usage.completed',
+    ])
   })
 })

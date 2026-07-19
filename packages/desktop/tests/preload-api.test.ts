@@ -10,6 +10,8 @@ describe('createDesktopApi', () => {
       () => 'request-1',
       {
         selectWorkspace: () => Promise.resolve(null),
+        listWorkspaceEditors: () => Promise.resolve([]),
+        openWorkspaceInEditor: () => Promise.resolve(),
         get: () =>
           Promise.resolve({
             coreStatus: 'ready',
@@ -30,7 +32,9 @@ describe('createDesktopApi', () => {
       'hatchBuddy',
       'interruptGeneration',
       'listSessions',
+      'listWorkspaceEditors',
       'openLogFolder',
+      'openWorkspaceInEditor',
       'petBuddy',
       'readFile',
       'readMemory',
@@ -116,6 +120,10 @@ describe('createDesktopApi', () => {
       () => 'request-1',
       {
         selectWorkspace: () => Promise.resolve('G:/project'),
+        listWorkspaceEditors: () => Promise.resolve([
+          { id: 'vscode', name: 'Visual Studio Code', icon: 'vscode' },
+        ]),
+        openWorkspaceInEditor: () => Promise.resolve(),
         get: () =>
           Promise.resolve({
             coreStatus: 'ready',
@@ -128,5 +136,9 @@ describe('createDesktopApi', () => {
     )
 
     await expect(api.selectWorkspace()).resolves.toBe('G:/project')
+    await expect(api.listWorkspaceEditors(true)).resolves.toEqual([
+      { id: 'vscode', name: 'Visual Studio Code', icon: 'vscode' },
+    ])
+    await expect(api.openWorkspaceInEditor('vscode', 'G:/project')).resolves.toBeUndefined()
   })
 })

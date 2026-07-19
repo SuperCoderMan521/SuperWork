@@ -34,4 +34,12 @@ describe('desktop styles', () => {
     expect(glyphRule).toContain('width: 8px')
     expect(glyphRule).toContain('height: 8px')
   })
+
+  test('anchors the workspace editor menu below its trigger', () => {
+    const menuRule = css.match(/\.workspace-editor-menu\s*\{[^}]+\}/)?.[0] ?? ''
+
+    expect(menuRule).toContain('position: absolute')
+    expect(menuRule).toContain('right: 0')
+    expect(menuRule).toContain('z-index:')
+  })
 })

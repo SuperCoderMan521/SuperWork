@@ -18,6 +18,8 @@ import type {
   DesktopTokenUsageSchema,
   DesktopModelPricingSchema,
   DesktopTurnUsageReportSchema,
+  DesktopPerformanceRangeSchema,
+  DesktopPerformanceSnapshotSchema,
   BuddySnapshotSchema,
   PermissionDecisionSchema,
   PermissionModeSchema,
@@ -47,6 +49,8 @@ export type DesktopToolCall = z.infer<typeof DesktopToolCallSchema>
 export type DesktopTokenUsage = z.infer<typeof DesktopTokenUsageSchema>
 export type DesktopModelPricing = z.infer<typeof DesktopModelPricingSchema>
 export type DesktopTurnUsageReport = z.infer<typeof DesktopTurnUsageReportSchema>
+export type DesktopPerformanceRange = z.infer<typeof DesktopPerformanceRangeSchema>
+export type DesktopPerformanceSnapshot = z.infer<typeof DesktopPerformanceSnapshotSchema>
 export type BuddySnapshot = z.infer<typeof BuddySnapshotSchema>
 export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>
 export type PermissionMode = z.infer<typeof PermissionModeSchema>

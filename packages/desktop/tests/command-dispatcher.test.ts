@@ -3,6 +3,16 @@ import { DesktopCommandDispatcher } from '../core/command-dispatcher.js'
 import type { DesktopEvent } from '../shared/protocol.js'
 
 describe('DesktopCommandDispatcher', () => {
+  test('routes workspace performance snapshots', async () => {
+    const events: DesktopEvent[] = []
+    const dispatcher = new DesktopCommandDispatcher({
+      controller: { createSession: () => { throw new Error('unused') }, submitPrompt: async () => {}, interrupt: () => false, setModel: () => {}, setMode: () => {} },
+      listSessions: async () => [], resolvePermission: () => false, emit: event => events.push(event), shutdown: async () => {},
+      getPerformance: async (cwd, range, force) => ({ cwd, range, generatedAt: 1, scannedSessions: force ? 2 : 1, scannedLines: 0, skippedLines: 0, truncated: false, summary: { sessions: 0, turns: 0, messages: 0, apiCalls: 0, tokens: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }, pricedTokenShare: 0, wallClockMs: 0, failedTurns: 0, interruptedTurns: 0 }, trend: [], models: [], tools: [], diagnostics: { debugLogAvailable: false, langfuseConfigured: false }, warnings: [] }),
+    })
+    await dispatcher.dispatch({ type: 'performance.get', requestId: 'perf-1', cwd: 'G:/project', range: '30d', force: true })
+    expect(events[0]).toMatchObject({ type: 'performance.snapshot', requestId: 'perf-1', snapshot: { cwd: 'G:/project', range: '30d', scannedSessions: 2 } })
+  })
   test('lists existing sessions', async () => {
     const events: DesktopEvent[] = []
     const dispatcher = new DesktopCommandDispatcher({

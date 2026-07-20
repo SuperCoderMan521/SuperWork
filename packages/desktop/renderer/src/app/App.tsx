@@ -5,6 +5,8 @@ import type {
   DesktopMemoryFile,
   DesktopModelConnectionResult,
   DesktopModelConfig,
+  DesktopPerformanceRange,
+  DesktopPerformanceSnapshot,
   DesktopSessionSummary,
   DiagnosticsSnapshot,
 } from '../../../shared/protocol.js'
@@ -19,6 +21,7 @@ import { SessionSidebar } from '../features/history/SessionSidebar.js'
 import { ConfigCenter, type ConfigTab } from '../features/settings/ConfigCenter.js'
 import { BrandName } from '../components/BrandName.js'
 import { BuddyPanel } from '../features/buddy/BuddyPanel.js'
+import { PerformanceCenter } from '../features/performance/PerformanceCenter.js'
 import type { BuddySnapshot } from '../../../shared/protocol.js'
 import { ResizableWorkspace } from './ResizableWorkspace.js'
 import {
@@ -27,7 +30,7 @@ import {
   type DesktopRendererState,
 } from './reducer.js'
 
-type View = 'chat' | 'settings'
+type View = 'chat' | 'settings' | 'performance'
 const PROJECT_DEFAULT_CWD = '.'
 const LAST_WORKSPACE_KEY = 'superwork.lastWorkspace'
 
@@ -122,12 +125,18 @@ export function App(): React.ReactNode {
     readStoredWorkspace(),
   )
   const [buddy, setBuddy] = useState<BuddySnapshot | null>(null)
+  const [performance, setPerformance] = useState<DesktopPerformanceSnapshot | null>(null)
+  const [performanceRange, setPerformanceRange] = useState<DesktopPerformanceRange>('30d')
+  const [performanceLoading, setPerformanceLoading] = useState(false)
+  const [performanceError, setPerformanceError] = useState<string | null>(null)
   const pendingWorkspaceSession = useRef<string | null>(null)
   const pendingPrompt = useRef<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = window.desktopApi.subscribe(event => {
       if (event.type === 'buddy.snapshot') { setBuddy(event.state); return }
+      if (event.type === 'performance.snapshot') { setPerformance(event.snapshot); setPerformanceLoading(false); setPerformanceError(null); return }
+      if (event.type === 'command.failed' && !event.sessionId) { setPerformanceLoading(false); setPerformanceError(event.error.message) }
       if (event.type === 'session.snapshot') {
         const createdSessionId = sessionIdFromPendingWorkspaceSnapshot(
           pendingWorkspaceSession.current,
@@ -223,6 +232,17 @@ export function App(): React.ReactNode {
     setSettingsTab(tab)
     setView('settings')
     refreshConfig()
+  }
+
+  const requestPerformance = (range = performanceRange, force = false) => {
+    setPerformanceLoading(true)
+    setPerformanceError(null)
+    window.desktopApi.getPerformance(defaultWorkspace, range, force)
+  }
+
+  const openPerformance = () => {
+    setView('performance')
+    requestPerformance()
   }
 
   const selectSession = (sessionId: string) => {
@@ -343,6 +363,7 @@ export function App(): React.ReactNode {
       onOpenDiagnostics={() => void refreshDiagnostics()}
       disableCreate={coreStatus !== 'ready'}
       onOpenSettings={openSettings}
+      onOpenPerformance={openPerformance}
       buddy={buddy}
       onHatchBuddy={() => window.desktopApi.hatchBuddy()}
       onRehatchBuddy={() => window.desktopApi.rehatchBuddy()}
@@ -477,6 +498,11 @@ export function App(): React.ReactNode {
             setCompactSummary(null)
           }}
         />
+      ) : view === 'performance' ? (
+        <div className="performance-layout">
+          {sidebar}
+          <PerformanceCenter cwd={defaultWorkspace} range={performanceRange} snapshot={performance} loading={performanceLoading} error={performanceError} onBack={() => setView('chat')} onRefresh={() => requestPerformance(performanceRange, true)} onRangeChange={range => { setPerformanceRange(range); setPerformance(null); requestPerformance(range) }} />
+        </div>
       ) : (
         chatView
       )}

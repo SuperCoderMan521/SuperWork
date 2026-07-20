@@ -27,6 +27,46 @@ describe('desktopReducer', () => {
     )
   })
 
+  test('preserves the original display order when a streamed assistant message is finalized', () => {
+    const state = createDesktopState()
+    const streamed = desktopReducer(state, {
+      type: 'message.delta',
+      sessionId: 'session-1',
+      sequence: 1,
+      messageId: 'streaming-assistant',
+      delta: 'answer',
+    })
+    const withTool = desktopReducer(streamed, {
+      type: 'tool.updated',
+      sessionId: 'session-1',
+      sequence: 2,
+      tool: {
+        id: 'tool-1',
+        name: 'Read',
+        state: 'running',
+        summary: 'README.md',
+        displayOrder: 2,
+      },
+    })
+    const finalized = desktopReducer(withTool, {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 3,
+      message: {
+        id: 'streaming-assistant',
+        role: 'assistant',
+        kind: 'text',
+        content: 'answer',
+        createdAt: 3,
+        displayOrder: 3,
+      },
+    })
+
+    expect(
+      finalized.sessions['session-1']?.messages['streaming-assistant']?.displayOrder,
+    ).toBe(1)
+  })
+
   test('marks a session for resync when sequence has a gap', () => {
     const state = createDesktopState()
     const next = desktopReducer(state, {

@@ -29,6 +29,7 @@ describe('createDesktopApi', () => {
       'getBuddy',
       'getConfig',
       'getDiagnostics',
+      'getPerformance',
       'hatchBuddy',
       'interruptGeneration',
       'listSessions',
@@ -72,6 +73,13 @@ describe('createDesktopApi', () => {
         text: 'hello',
       },
     ])
+  })
+
+  test('builds a typed performance command', () => {
+    const commands: DesktopCommand[] = []
+    const api = createDesktopApi(command => commands.push(command), () => () => {}, () => 'request-1')
+    api.getPerformance('G:/project', '30d', true)
+    expect(commands).toEqual([{ type: 'performance.get', requestId: 'request-1', cwd: 'G:/project', range: '30d', force: true }])
   })
 
   test('builds typed configuration commands', () => {

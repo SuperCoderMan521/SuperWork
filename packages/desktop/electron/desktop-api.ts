@@ -2,6 +2,7 @@ import type {
   DesktopCommand,
   DesktopEvent,
   DesktopModelConfig,
+  DesktopPerformanceRange,
   DiagnosticsSnapshot,
   PermissionDecision,
   PermissionMode,
@@ -32,6 +33,7 @@ export type DesktopApi = {
   writeMemory(path: string, content: string): void
   compactMemory(path: string, content: string): void
   getBuddy(): void
+  getPerformance(cwd: string, range: DesktopPerformanceRange, force?: boolean): void
   hatchBuddy(): void
   rehatchBuddy(): void
   petBuddy(): void
@@ -115,6 +117,7 @@ export function createDesktopApi(
     compactMemory: (path, content) =>
       send({ type: 'memory.compact', requestId: request(), path, content }),
     getBuddy: () => send({ type: 'buddy.get', requestId: request() }),
+    getPerformance: (cwd, range, force) => send({ type: 'performance.get', requestId: request(), cwd, range, force }),
     hatchBuddy: () => send({ type: 'buddy.hatch', requestId: request() }),
     rehatchBuddy: () => send({ type: 'buddy.rehatch', requestId: request() }),
     petBuddy: () => send({ type: 'buddy.pet', requestId: request() }),

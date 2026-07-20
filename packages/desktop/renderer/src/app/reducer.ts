@@ -109,9 +109,16 @@ function updateSession(
   switch (event.type) {
     case 'message.added': {
       const exists = event.message.id in session.messages
+      const current = session.messages[event.message.id]
+      const message = current
+        ? {
+            ...event.message,
+            displayOrder: current.displayOrder ?? event.message.displayOrder,
+          }
+        : event.message
       session = {
         ...session,
-        messages: { ...session.messages, [event.message.id]: event.message },
+        messages: { ...session.messages, [event.message.id]: message },
         messageOrder: exists
           ? session.messageOrder
           : [...session.messageOrder, event.message.id],

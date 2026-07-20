@@ -56,6 +56,15 @@ describe('DesktopCommandSchema', () => {
       }).success,
     ).toBe(true)
   })
+
+  test('accepts workspace performance requests and rejects invalid ranges', () => {
+    expect(DesktopCommandSchema.safeParse({
+      type: 'performance.get', requestId: 'perf-1', cwd: 'G:/project', range: '30d', force: true,
+    }).success).toBe(true)
+    expect(DesktopCommandSchema.safeParse({
+      type: 'performance.get', requestId: 'perf-2', cwd: 'G:/project', range: 'year',
+    }).success).toBe(false)
+  })
 })
 
 describe('DesktopEventSchema', () => {
@@ -125,5 +134,22 @@ describe('DesktopEventSchema', () => {
         },
       }).success,
     ).toBe(true)
+  })
+
+  test('accepts performance snapshots', () => {
+    expect(DesktopEventSchema.safeParse({
+      type: 'performance.snapshot', requestId: 'perf-1', snapshot: {
+        cwd: 'G:/project', range: '30d', generatedAt: 100, scannedSessions: 1,
+        scannedLines: 4, skippedLines: 0, truncated: false,
+        summary: {
+          sessions: 1, turns: 1, messages: 2, apiCalls: 1,
+          tokens: { inputTokens: 10, outputTokens: 4, cacheCreationInputTokens: 2, cacheReadInputTokens: 20 },
+          cacheHitRate: 0.625, estimatedCostUsd: 0.001, pricedTokenShare: 1,
+          wallClockMs: 1000, apiDurationMs: 800, failedTurns: 0, interruptedTurns: 0,
+        },
+        trend: [], models: [], tools: [],
+        diagnostics: { debugLogAvailable: false, langfuseConfigured: false }, warnings: [],
+      },
+    }).success).toBe(true)
   })
 })

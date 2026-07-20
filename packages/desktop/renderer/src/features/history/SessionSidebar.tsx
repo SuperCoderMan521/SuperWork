@@ -5,6 +5,7 @@ import type {
 import { BrandName } from '../../components/BrandName.js'
 import { BuddyPanel } from '../buddy/BuddyPanel.js'
 import type { BuddySnapshot } from '../../../../shared/protocol.js'
+import { useI18n } from '../../i18n/I18nProvider.js'
 
 type SessionSidebarProps = {
   sessions: DesktopSessionSummary[]
@@ -16,6 +17,7 @@ type SessionSidebarProps = {
   disableCreate?: boolean
   onDelete?: (sessionId: string) => void
   onOpenSettings?: (tab: 'model' | 'skills' | 'mcp' | 'plugins' | 'memory') => void
+  onOpenPerformance?: () => void
   buddy?: BuddySnapshot | null
   onHatchBuddy?: () => void
   onRehatchBuddy?: () => void
@@ -79,6 +81,7 @@ export function SessionSidebar({
   disableCreate = false,
   onDelete,
   onOpenSettings,
+  onOpenPerformance,
   buddy,
   onHatchBuddy,
   onRehatchBuddy,
@@ -86,6 +89,7 @@ export function SessionSidebar({
   onMuteBuddy,
 }: SessionSidebarProps): React.ReactNode {
   const groups = groupSessionsByWorkspace(sessions)
+  const { locale, toggleLocale } = useI18n()
 
   return (
     <aside className="sidebar">
@@ -155,6 +159,7 @@ export function SessionSidebar({
       </nav>
       {onHatchBuddy && onRehatchBuddy && onPetBuddy && onMuteBuddy ? <BuddyPanel state={buddy ?? null} onHatch={onHatchBuddy} onRehatch={onRehatchBuddy} onPet={onPetBuddy} onMute={onMuteBuddy} /> : null}
       <div className="sidebar-actions">
+        {onOpenPerformance ? <button className="performance-shortcut" type="button" onClick={onOpenPerformance}><span aria-hidden="true">◷</span> 性能中心</button> : null}
         {onOpenSettings ? (
           <div className="settings-shortcuts" aria-label="配置入口">
             <button type="button" onClick={() => onOpenSettings('model')} aria-label="打开模型配置">
@@ -197,6 +202,9 @@ export function SessionSidebar({
         >
           <span className={`status-dot status-${coreStatus}`} aria-hidden="true" />
           Core {statusLabel(coreStatus)} · 查看日志
+        </button>
+        <button className="language-toggle" type="button" onClick={toggleLocale} title={locale === 'zh-CN' ? 'Switch to English' : '切换为中文'} aria-label={locale === 'zh-CN' ? 'Switch to English' : '切换为中文'}>
+          <span aria-hidden="true">文</span>{locale === 'zh-CN' ? ' EN' : ' 中'}
         </button>
       </div>
     </aside>

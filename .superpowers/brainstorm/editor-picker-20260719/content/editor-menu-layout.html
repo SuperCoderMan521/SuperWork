@@ -1,0 +1,47 @@
+<h2>“在编辑器中打开”菜单放在哪里？</h2>
+<p class="subtitle">点击任意方案选择。三种方案都会实时检测本机已安装编辑器，并打开整个工作区。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:22px;background:#141516;min-height:215px">
+      <div style="display:flex;justify-content:flex-end;position:relative">
+        <button class="mock-button" style="background:#242629;border-color:#444;color:#eee">◈ 在编辑器中打开⌄</button>
+        <div style="position:absolute;right:0;top:40px;width:250px;padding:7px;border:1px solid #3b3d40;border-radius:10px;background:#202225;box-shadow:0 14px 36px #0009;text-align:left">
+          <div style="padding:7px 9px;color:#85888d;font-size:11px">打开工作区</div>
+          <div style="padding:9px;border-radius:7px;background:#33363a;color:#fff">🔷 Visual Studio Code</div>
+          <div style="padding:9px;color:#ddd">◼ Cursor</div>
+          <div style="padding:9px;color:#ddd">◆ JetBrains WebStorm</div>
+          <div style="margin-top:5px;padding:8px 9px;border-top:1px solid #393b3e;color:#9ea1a6;font-size:12px">↻ 重新检测编辑器</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · 按钮下拉菜单（推荐）</h3><p>位置与系统资源管理器一致，路径短，不遮挡文件内容。</p></div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:22px;background:#141516;min-height:215px;display:flex;align-items:center;justify-content:center">
+      <div style="width:280px;padding:12px;border:1px solid #414348;border-radius:12px;background:#202225;box-shadow:0 18px 50px #000a">
+        <strong style="display:block;margin-bottom:10px;color:#eee">选择编辑器</strong>
+        <div style="padding:9px;border-radius:7px;background:#33363a;color:#fff">🔷 Visual Studio Code</div>
+        <div style="padding:9px;color:#ddd">◼ Cursor</div>
+        <div style="padding:9px;color:#ddd">◆ JetBrains WebStorm</div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B · 居中弹窗</h3><p>选择更醒目，但会遮挡当前文件预览，交互稍重。</p></div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:22px;background:#141516;min-height:215px">
+      <div style="padding:10px 13px;border:1px solid #414348;border-radius:9px;background:#202225;color:#999">搜索编辑器…</div>
+      <div style="margin-top:8px;padding:10px;border-radius:8px;background:#33363a;color:#fff">🔷 Visual Studio Code</div>
+      <div style="padding:10px;color:#ddd">◼ Cursor</div>
+      <div style="padding:10px;color:#ddd">◆ JetBrains WebStorm</div>
+    </div>
+    <div class="card-body"><h3>C · 命令面板</h3><p>适合安装很多 IDE 的用户，但当前规模下搜索框显得多余。</p></div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>共同状态设计</h3>
+  <p>首次展开显示“正在检测编辑器…”；检测成功只列出可启动项；未发现时显示“未检测到支持的编辑器”与“重新检测”；启动失败时保留菜单并在对应项下显示错误。</p>
+</div>

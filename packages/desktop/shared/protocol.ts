@@ -35,6 +35,8 @@ export type {
   DesktopTokenUsage,
   DesktopModelPricing,
   DesktopTurnUsageReport,
+  DesktopPerformanceRange,
+  DesktopPerformanceSnapshot,
   PermissionDecision,
   PermissionMode,
 } from './types.js'

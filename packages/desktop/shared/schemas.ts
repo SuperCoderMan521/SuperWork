@@ -76,6 +76,27 @@ export const DesktopTurnUsageReportSchema = z.object({
   displayOrder: z.number().int().nonnegative().optional(),
 })
 
+export const DesktopPerformanceRangeSchema = z.enum(['7d', '30d', 'all'])
+const PerformanceSummarySchema = z.object({
+  sessions: z.number().int().nonnegative(), turns: z.number().int().nonnegative(),
+  messages: z.number().int().nonnegative(), apiCalls: z.number().int().nonnegative(),
+  tokens: DesktopTokenUsageSchema, cacheHitRate: z.number().min(0).max(1).optional(),
+  estimatedCostUsd: z.number().nonnegative().optional(), pricedTokenShare: z.number().min(0).max(1),
+  wallClockMs: z.number().int().nonnegative(), apiDurationMs: z.number().int().nonnegative().optional(),
+  failedTurns: z.number().int().nonnegative(), interruptedTurns: z.number().int().nonnegative(),
+})
+export const DesktopPerformanceSnapshotSchema = z.object({
+  cwd: z.string().min(1), range: DesktopPerformanceRangeSchema,
+  generatedAt: z.number().int().nonnegative(), scannedSessions: z.number().int().nonnegative(),
+  scannedLines: z.number().int().nonnegative(), skippedLines: z.number().int().nonnegative(),
+  truncated: z.boolean(), summary: PerformanceSummarySchema,
+  trend: z.array(z.object({ bucket: z.string().min(1), tokens: z.number().int().nonnegative(), wallClockMs: z.number().int().nonnegative(), sessions: z.number().int().nonnegative(), failures: z.number().int().nonnegative() })),
+  models: z.array(z.object({ model: z.string().min(1), tokens: DesktopTokenUsageSchema, apiCalls: z.number().int().nonnegative(), estimatedCostUsd: z.number().nonnegative().optional() })),
+  tools: z.array(z.object({ name: z.string().min(1), calls: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), failed: z.number().int().nonnegative(), averageDurationMs: z.number().nonnegative().optional() })),
+  diagnostics: z.object({ debugLogAvailable: z.boolean(), debugLogPath: z.string().optional(), debugLogUpdatedAt: z.number().int().nonnegative().optional(), debugLogSizeBytes: z.number().int().nonnegative().optional(), langfuseConfigured: z.boolean() }),
+  warnings: z.array(z.string()),
+})
+
 export const DesktopToolCallSchema = z.object({
   id: IdSchema,
   name: z.string().min(1),
@@ -258,6 +279,7 @@ export const DesktopCommandSchema = z.discriminatedUnion('type', [
   RequestSchema.extend({ type: z.literal('buddy.rehatch') }),
   RequestSchema.extend({ type: z.literal('buddy.pet'), sessionId: IdSchema.optional() }),
   RequestSchema.extend({ type: z.literal('buddy.setMuted'), muted: z.boolean() }),
+  RequestSchema.extend({ type: z.literal('performance.get'), cwd: z.string().min(1), range: DesktopPerformanceRangeSchema, force: z.boolean().optional() }),
 ])
 
 export const DesktopEventSchema = z.discriminatedUnion('type', [
@@ -347,4 +369,5 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
   }),
   RequestSchema.extend({ type: z.literal('buddy.snapshot'), state: BuddySnapshotSchema }),
   RequestSchema.extend({ type: z.literal('buddy.reaction'), reaction: z.string(), petAt: z.number().int().nonnegative().optional() }),
+  RequestSchema.extend({ type: z.literal('performance.snapshot'), snapshot: DesktopPerformanceSnapshotSchema }),
 ])

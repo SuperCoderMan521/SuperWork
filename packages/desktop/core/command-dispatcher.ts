@@ -4,6 +4,8 @@ import type {
   DesktopEvent,
   DesktopModelConnectionResult,
   DesktopModelConfig,
+  DesktopPerformanceRange,
+  DesktopPerformanceSnapshot,
   DesktopSession,
   DesktopSessionSummary,
   PermissionDecision,
@@ -37,6 +39,7 @@ type CommandDispatcherOptions = {
   emit: (event: DesktopEvent) => void
   shutdown: () => Promise<void>
   buddy?: DesktopBuddyService
+  getPerformance?: (cwd: string, range: DesktopPerformanceRange, force?: boolean) => Promise<DesktopPerformanceSnapshot>
 }
 
 function unsupported(command: DesktopCommand['type']): never {
@@ -207,6 +210,13 @@ export class DesktopCommandDispatcher {
         return
       case 'buddy.setMuted':
         this.options.emit({ type: 'buddy.snapshot', requestId: command.requestId, state: await (this.options.buddy?.setMuted(command.muted) ?? unsupported(command.type)) })
+        return
+      case 'performance.get':
+        this.options.emit({
+          type: 'performance.snapshot',
+          requestId: command.requestId,
+          snapshot: await (this.options.getPerformance?.(command.cwd, command.range, command.force) ?? unsupported(command.type)),
+        })
         return
     }
   }

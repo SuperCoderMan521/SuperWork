@@ -9,6 +9,7 @@ import { testModelConnection } from './model-connection-test.js'
 import { PermissionBroker } from './permission-broker.js'
 import { SessionService } from './session-service.js'
 import { DesktopBuddyService } from './buddy-service.js'
+import { DesktopPerformanceService } from './performance-service.js'
 
 /**
  * Writes a leveled log line to stderr so it never pollutes the JSON Lines
@@ -93,6 +94,10 @@ async function main(): Promise<void> {
   )
   const configService = new DesktopConfigService()
   const buddy = new DesktopBuddyService()
+  const performance = new DesktopPerformanceService(
+    cwd => storageModule.getProjectDir(cwd),
+    cwd => configService.modelConfig(cwd),
+  )
   controller = new DesktopConversationController({
     runQuery: input => queryRunner.run(input),
     emit,
@@ -147,6 +152,7 @@ async function main(): Promise<void> {
       await storageModule.flushSessionStorage()
     },
     buddy,
+    getPerformance: (cwd, range, force) => performance.snapshot(cwd, range, force),
   })
 
   logCore('info', 'startup services_ready, entering protocol pump')

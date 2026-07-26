@@ -159,29 +159,29 @@ export function SessionSidebar({
       </nav>
       {onHatchBuddy && onRehatchBuddy && onPetBuddy && onMuteBuddy ? <BuddyPanel state={buddy ?? null} onHatch={onHatchBuddy} onRehatch={onRehatchBuddy} onPet={onPetBuddy} onMute={onMuteBuddy} /> : null}
       <div className="sidebar-actions">
-        {onOpenPerformance ? <button className="performance-shortcut" type="button" onClick={onOpenPerformance}><span aria-hidden="true">◷</span> 性能中心</button> : null}
-        {onOpenSettings ? (
+        {onOpenSettings || onOpenPerformance ? (
           <div className="settings-shortcuts" aria-label="配置入口">
-            <button type="button" onClick={() => onOpenSettings('model')} aria-label="打开模型配置">
+            {onOpenPerformance ? <button className="performance-shortcut" type="button" onClick={onOpenPerformance} aria-label="打开性能中心"><span aria-hidden="true">◷</span> 性能</button> : null}
+            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('model')} aria-label="打开模型配置">
               <span aria-hidden="true">⚙</span>
               模型
-            </button>
-            <button type="button" onClick={() => onOpenSettings('skills')} aria-label="打开 Skills 配置">
+            </button> : null}
+            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('skills')} aria-label="打开 Skills 配置">
               <span aria-hidden="true">✦</span>
               Skills
-            </button>
-            <button type="button" onClick={() => onOpenSettings('mcp')} aria-label="打开 MCP 配置">
+            </button> : null}
+            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('mcp')} aria-label="打开 MCP 配置">
               <span aria-hidden="true">◎</span>
               MCP
-            </button>
-            <button type="button" onClick={() => onOpenSettings('plugins')} aria-label="打开 Plugins 配置">
+            </button> : null}
+            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('plugins')} aria-label="打开 Plugins 配置">
               <span aria-hidden="true">◫</span>
               Plugins
-            </button>
-            <button type="button" onClick={() => onOpenSettings('memory')} aria-label="打开 Memory 配置">
+            </button> : null}
+            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('memory')} aria-label="打开 Memory 配置">
               <span aria-hidden="true">◌</span>
               Memory
-            </button>
+            </button> : null}
           </div>
         ) : null}
         <button

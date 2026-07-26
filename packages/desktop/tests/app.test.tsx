@@ -142,6 +142,14 @@ describe('App layout', () => {
     expect(html).toContain('打开 Memory 配置')
   })
 
+  test('renders the performance shortcut inside the same sidebar shortcut menu', () => {
+    const html = renderToStaticMarkup(<App />)
+
+    expect(html).toMatch(
+      /<div class="settings-shortcuts"[^>]*>[\s\S]*class="performance-shortcut"/,
+    )
+  })
+
   test('keeps the composer available on the welcome page', () => {
     const html = renderToStaticMarkup(<App />)
 

@@ -43,6 +43,13 @@ describe('desktop styles', () => {
     expect(menuRule).toContain('z-index:')
   })
 
+  test('uses the same compact shortcut grid for performance and settings entries', () => {
+    const shortcutRule = css.match(/\.settings-shortcuts\s*\{[^}]+\}/)?.[0] ?? ''
+
+    expect(shortcutRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
+    expect(css).not.toContain('.performance-shortcut{width:100%;text-align:left}')
+  })
+
   test('keeps permission actions horizontal when the file panel is open', () => {
     const panelRule = css.match(/\.permission-panel\s*\{[^}]+\}/)?.[0] ?? ''
     const actionRule = css.match(/\.permission-actions\s*\{[^}]+\}/)?.[0] ?? ''

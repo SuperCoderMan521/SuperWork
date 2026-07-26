@@ -54,6 +54,7 @@ export class DesktopEventAdapter {
   private sequence = 0
   private readonly tools = new Map<string, DesktopToolCall>()
   private hasStreamingText = false
+  private readonly streamingTextBlockIds = new Map<number, string>()
   private hasAssistantOutput = false
   private currentUsage: DesktopTokenUsage = { ...EMPTY_DESKTOP_USAGE }
   private totalUsage: DesktopTokenUsage = { ...EMPTY_DESKTOP_USAGE }
@@ -104,16 +105,16 @@ export class DesktopEventAdapter {
       return [...events, ...this.complete(status)]
     }
 
-    const delta = this.textDelta(value)
-    if (delta !== undefined) {
+    const textDelta = this.textDelta(value)
+    if (textDelta !== undefined) {
       this.hasStreamingText = true
       this.hasAssistantOutput = true
-      this.anchorMessageId = 'streaming-assistant'
+      this.anchorMessageId = textDelta.messageId
       return [
         this.sessionEvent({
           type: 'message.delta',
-          messageId: 'streaming-assistant',
-          delta,
+          messageId: textDelta.messageId,
+          delta: textDelta.delta,
         }),
       ]
     }
@@ -158,14 +159,17 @@ export class DesktopEventAdapter {
         : blockType === 'redacted_thinking'
           ? 'redacted_thinking' as const
           : 'text' as const
-      const streamingText = blockType === 'text' && this.hasStreamingText
+      const streamingTextId = blockType === 'text' ? this.streamingTextIdForCompletedBlock(index) : undefined
+      const streamingText = blockType === 'text' && (streamingTextId !== undefined || this.hasStreamingText)
       const baseId = stringProperty(value, 'uuid')
       if (!streamingText && !baseId) return []
       if (streamingText) this.hasStreamingText = false
       return [this.sessionEvent({
         type: 'message.added',
         message: {
-          id: streamingText ? 'streaming-assistant' : messageBlockCount === 1 ? baseId! : `${baseId}-${index}`,
+          id: streamingText
+            ? streamingTextId ?? 'streaming-assistant'
+            : messageBlockCount === 1 ? baseId! : `${baseId}-${index}`,
           role: 'assistant',
           kind,
           content,
@@ -226,15 +230,37 @@ export class DesktopEventAdapter {
     this.currentUsage = { ...EMPTY_DESKTOP_USAGE }
   }
 
-  private textDelta(value: UnknownRecord): string | undefined {
+  private textDelta(value: UnknownRecord): { messageId: string; delta: string } | undefined {
     if (value.type !== 'stream_event' || !isRecord(value.event)) return undefined
     const event = value.event
     if (event.type !== 'content_block_delta' || !isRecord(event.delta)) {
       return undefined
     }
-    return event.delta.type === 'text_delta'
-      ? stringProperty(event.delta, 'text')
-      : undefined
+    if (event.delta.type !== 'text_delta') return undefined
+    const delta = stringProperty(event.delta, 'text')
+    if (delta === undefined) return undefined
+    return {
+      messageId: this.streamingTextIdForDelta(event),
+      delta,
+    }
+  }
+
+  private streamingTextIdForDelta(event: UnknownRecord): string {
+    const index = event.index
+    if (typeof index !== 'number') return 'streaming-assistant'
+    const existing = this.streamingTextBlockIds.get(index)
+    if (existing) return existing
+    const messageId = `streaming-assistant-${index}`
+    this.streamingTextBlockIds.set(index, messageId)
+    return messageId
+  }
+
+  private streamingTextIdForCompletedBlock(index: number): string | undefined {
+    const messageId = this.streamingTextBlockIds.get(index)
+    if (messageId) {
+      this.streamingTextBlockIds.delete(index)
+    }
+    return messageId
   }
 
   private toolResults(value: UnknownRecord): SessionEvent[] {

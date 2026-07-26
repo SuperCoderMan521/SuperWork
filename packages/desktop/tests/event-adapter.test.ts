@@ -138,6 +138,47 @@ describe('DesktopEventAdapter', () => {
     )
   })
 
+  test('keeps separate streaming text placeholders for separate content blocks', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+
+    const firstTextEvents = adapter.consume({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'First' } },
+    })
+    const secondTextEvents = adapter.consume({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 3, delta: { type: 'text_delta', text: 'Second' } },
+    })
+
+    expect(firstTextEvents[0]?.type === 'message.delta' && firstTextEvents[0].messageId).toBe(
+      'streaming-assistant-1',
+    )
+    expect(secondTextEvents[0]?.type === 'message.delta' && secondTextEvents[0].messageId).toBe(
+      'streaming-assistant-3',
+    )
+
+    const finalized = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-1',
+      message: { content: [
+        { type: 'thinking', thinking: 'Plan' },
+        { type: 'text', text: 'First' },
+        { type: 'thinking', thinking: 'Re-check' },
+        { type: 'text', text: 'Second' },
+      ] },
+    })
+    const messageIds = finalized
+      .filter(event => event.type === 'message.added')
+      .map(event => event.message.id)
+
+    expect(messageIds).toEqual([
+      'message-1-0',
+      'streaming-assistant-1',
+      'message-1-2',
+      'streaming-assistant-3',
+    ])
+  })
+
   test('converts tool use blocks into running tool cards', () => {
     const adapter = new DesktopEventAdapter('session-1', () => 100)
     expect(

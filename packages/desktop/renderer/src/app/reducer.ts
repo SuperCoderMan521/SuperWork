@@ -67,12 +67,25 @@ function emptySession(id: string): RendererSession {
   }
 }
 
+function nextDisplayOrder(session: RendererSession): number {
+  const orders = [
+    ...Object.values(session.messages).map(message => message.displayOrder),
+    ...Object.values(session.tools).map(tool => tool.displayOrder),
+    ...(session.turnUsageReports ?? []).map(report => report.displayOrder),
+  ].filter((order): order is number => typeof order === 'number')
+  return (orders.length ? Math.max(...orders) : session.messageOrder.length + session.toolOrder.length) + 1
+}
+
 function normalizeSession(session: DesktopSession): RendererSession {
+  const messages = session.messages.map((message, index) => ({
+    ...message,
+    displayOrder: message.displayOrder ?? index + 1,
+  }))
   return {
     ...session,
     turnUsageReports: session.turnUsageReports ?? [],
-    messages: Object.fromEntries(session.messages.map(message => [message.id, message])),
-    messageOrder: session.messages.map(message => message.id),
+    messages: Object.fromEntries(messages.map(message => [message.id, message])),
+    messageOrder: messages.map(message => message.id),
     tools: Object.fromEntries(session.tools.map(tool => [tool.id, tool])),
     toolOrder: session.tools.map(tool => tool.id),
     permissions: {},
@@ -141,6 +154,7 @@ function updateSession(
           [event.messageId]: {
             ...current,
             content: `${current.content}${event.delta}`,
+            displayOrder: current.displayOrder ?? nextDisplayOrder(session),
           },
         },
         messageOrder: exists

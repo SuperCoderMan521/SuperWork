@@ -103,6 +103,54 @@ describe('desktopReducer', () => {
     expect(next.sessions['session-1']?.model).toBe('sonnet')
   })
 
+  test('backfills display order for restored messages without moving new streamed output before history', () => {
+    const state = desktopReducer(createDesktopState(), {
+      type: 'session.snapshot',
+      sessionId: 'session-1',
+      sequence: 8,
+      session: {
+        id: 'session-1',
+        title: 'Conversation',
+        cwd: 'G:/project',
+        updatedAt: 100,
+        model: 'sonnet',
+        mode: 'default',
+        messages: [
+          {
+            id: 'old-user',
+            role: 'user',
+            content: 'old question',
+            createdAt: 100,
+          },
+          {
+            id: 'old-assistant',
+            role: 'assistant',
+            content: 'old answer',
+            createdAt: 200,
+          },
+        ],
+        tools: [],
+        generationState: 'idle',
+        sequence: 8,
+      },
+    })
+
+    const streaming = desktopReducer(state, {
+      type: 'message.delta',
+      sessionId: 'session-1',
+      sequence: 9,
+      messageId: 'streaming-assistant',
+      delta: 'new answer',
+    })
+
+    const session = streaming.sessions['session-1']
+    expect(session?.messages['old-user']?.displayOrder).toBe(1)
+    expect(session?.messages['old-assistant']?.displayOrder).toBe(2)
+    expect(
+      session?.messages['streaming-assistant']?.displayOrder,
+    ).toBeGreaterThan(session?.messages['old-assistant']?.displayOrder ?? 0)
+  })
+
   test('removes a permission when its tool reaches a terminal state', () => {
     const state = createDesktopState()
     const requested = desktopReducer(state, {

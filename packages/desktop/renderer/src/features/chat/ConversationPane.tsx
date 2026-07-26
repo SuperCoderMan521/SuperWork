@@ -156,9 +156,15 @@ export function groupConversationTimeline(
 }
 
 function conversationToolIsVisible(
-  _session: RendererSession,
+  session: RendererSession,
   tool: DesktopToolCall,
 ): boolean {
+  if (
+    session.generationState !== 'running' &&
+    session.generationState !== 'interrupting'
+  ) {
+    return true
+  }
   if (tool.state === 'running' || tool.state === 'pending') return true
   return [
     'agent',

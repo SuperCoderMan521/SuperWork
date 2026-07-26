@@ -416,4 +416,32 @@ describe('DesktopEventAdapter', () => {
     expect(first.map(event => event.type)).toEqual(['message.added'])
     expect(second).toEqual([])
   })
+
+  test('deduplicates visually identical assistant text with different whitespace', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+
+    const first = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-1',
+      message: {
+        content: [{
+          type: 'text',
+          text: 'Scheduled task created.\n\nIt runs every day at 9:00 AM.',
+        }],
+      },
+    })
+    const second = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-2',
+      message: {
+        content: [{
+          type: 'text',
+          text: 'Scheduled task created.  \r\n\r\nIt runs every day at 9:00 AM.',
+        }],
+      },
+    })
+
+    expect(first.map(event => event.type)).toEqual(['message.added'])
+    expect(second).toEqual([])
+  })
 })

@@ -84,6 +84,10 @@ function toolSummary(input: unknown): string {
   return ''
 }
 
+function assistantTextSignature(content: string): string {
+  return content.replace(/\s+/g, ' ').trim()
+}
+
 /** Converts unstable query stream shapes into the stable desktop protocol. */
 export class DesktopEventAdapter {
   private sequence = 0
@@ -199,7 +203,7 @@ export class DesktopEventAdapter {
           ? 'redacted_thinking' as const
           : 'text' as const
       if (kind === 'text') {
-        const signature = content.trim()
+        const signature = assistantTextSignature(content)
         if (signature && this.emittedAssistantTextSignatures.has(signature)) {
           return []
         }

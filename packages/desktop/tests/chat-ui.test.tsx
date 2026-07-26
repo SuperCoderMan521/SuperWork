@@ -435,7 +435,7 @@ describe('desktop chat UI', () => {
     expect(groups[1].item.id).toBe('tool:edit1')
   })
 
-  test('hides completed tool frames from the conversation after generation finishes', () => {
+  test('keeps completed tool records visible after generation finishes', () => {
     const html = renderToStaticMarkup(
       <ConversationPane
         session={{
@@ -463,8 +463,8 @@ describe('desktop chat UI', () => {
       />,
     )
 
-    expect(html).not.toContain('tool-card')
-    expect(html).not.toContain('src/app.ts')
+    expect(html).toContain('tool-card')
+    expect(html).toContain('src/app.ts')
   })
 
   test('keeps completed multi-agent tool frames visible in the conversation', () => {

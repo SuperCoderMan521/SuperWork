@@ -4,6 +4,14 @@
 
 ![SuperWork Desktop 界面](./main.png)
 
+## Screenshots
+
+![SuperWork screenshot 1](./images/1.png)
+
+![SuperWork screenshot 2](./images/2.png)
+
+![SuperWork screenshot 3](./images/3.png)
+
 SuperWork 是基于 `claude-code-best/claude-code` 的桌面能力扩展项目。项目目的，是在保留上游 TUI、配置兼容性和核心 `query()`/loop 逻辑的前提下，通过 Electron + Bun Core Sidecar 为原项目增加独立 Desktop 桌面端能力。
 
 > **上游项目声明：** SuperWork 基于 [claude-code-best/claude-code](https://github.com/claude-code-best/claude-code) 二次开发，主要修改目的是为原项目增加 Desktop 桌面能力。上游 README 声明项目仅供学习研究使用，且当前未提供可读取的根目录 `LICENSE` 文件。因此，本仓库不对上游代码授予复制、再分发或商业使用许可。原项目及其贡献者的权利不因本项目改名或二次开发而改变。

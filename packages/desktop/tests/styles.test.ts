@@ -50,14 +50,17 @@ describe('desktop styles', () => {
     expect(css).not.toContain('.performance-shortcut{width:100%;text-align:left}')
   })
 
-  test('keeps permission actions horizontal when the file panel is open', () => {
+  test('keeps the permission prompt inside the conversation layout', () => {
     const panelRule = css.match(/\.permission-panel\s*\{[^}]+\}/)?.[0] ?? ''
     const actionRule = css.match(/\.permission-actions\s*\{[^}]+\}/)?.[0] ?? ''
     const buttonRule = css.match(/\.permission-actions button\s*\{[^}]+\}/)?.[0] ?? ''
 
-    expect(panelRule).toContain('max-width: 760px')
-    expect(panelRule).toContain('right: 28px')
-    expect(actionRule).toContain('flex: 0 0 auto')
+    expect(panelRule).toContain('position: relative')
+    expect(panelRule).toContain('display: grid')
+    expect(panelRule).toContain('margin: 0 28px 12px')
+    expect(panelRule).not.toContain('position: fixed')
+    expect(actionRule).toContain('flex-wrap: wrap')
+    expect(actionRule).toContain('justify-content: flex-end')
     expect(buttonRule).toContain('white-space: nowrap')
   })
 
@@ -66,8 +69,8 @@ describe('desktop styles', () => {
     const contentRule = css.match(/\.permission-panel > div:first-child\s*\{[^}]+\}/)?.[0] ?? ''
     const summaryRule = css.match(/\.permission-panel p\s*\{[^}]+\}/)?.[0] ?? ''
 
-    expect(panelRule).toContain('max-inline-size: calc(100vw - 332px)')
-    expect(contentRule).toContain('max-width: 100%')
+    expect(panelRule).toContain('min-width: 0')
+    expect(contentRule).toContain('min-width: 0')
     expect(summaryRule).toContain('max-height:')
     expect(summaryRule).toContain('overflow: auto')
     expect(summaryRule).toContain('white-space: pre-wrap')

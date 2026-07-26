@@ -96,6 +96,7 @@ export class DesktopEventAdapter {
   private readonly streamingTextBlockIds = new Map<number, string>()
   private readonly streamingTextDisplayOrders = new Map<number, number>()
   private streamingBlockDisplayBase: number | undefined
+  private streamingResponseOrdinal = 0
   private readonly emittedAssistantTextSignatures = new Set<string>()
   private hasAssistantOutput = false
   private currentUsage: DesktopTokenUsage = { ...EMPTY_DESKTOP_USAGE }
@@ -107,7 +108,7 @@ export class DesktopEventAdapter {
   constructor(
     private readonly sessionId: string,
     private readonly now: () => number = Date.now,
-    initialSequence = 0,
+    private readonly initialSequence = 0,
     private readonly emitRequestState = true,
     private readonly modelConfig?: DesktopModelConfig,
     private readonly startedAt = now(),
@@ -218,7 +219,7 @@ export class DesktopEventAdapter {
         type: 'message.added',
         message: {
           id: streamingText
-            ? streamingTextId ?? 'streaming-assistant'
+            ? streamingTextId ?? this.streamingMessageBase()
             : messageBlockCount === 1 ? baseId! : `${baseId}-${index}`,
           role: 'assistant',
           kind,
@@ -237,6 +238,7 @@ export class DesktopEventAdapter {
     this.streamingTextBlockIds.clear()
     this.streamingTextDisplayOrders.clear()
     this.streamingBlockDisplayBase = undefined
+    this.streamingResponseOrdinal += 1
     return events
   }
 
@@ -313,12 +315,20 @@ export class DesktopEventAdapter {
 
   private streamingTextIdForDelta(event: UnknownRecord): string {
     const index = event.index
-    if (typeof index !== 'number') return 'streaming-assistant'
+    const base = this.streamingMessageBase()
+    if (typeof index !== 'number') return base
     const existing = this.streamingTextBlockIds.get(index)
     if (existing) return existing
-    const messageId = `streaming-assistant-${index}`
+    const messageId = `${base}-${index}`
     this.streamingTextBlockIds.set(index, messageId)
     return messageId
+  }
+
+  private streamingMessageBase(): string {
+    if (this.initialSequence === 0 && this.streamingResponseOrdinal === 0) {
+      return 'streaming-assistant'
+    }
+    return `streaming-assistant-${this.initialSequence}-${this.streamingResponseOrdinal}`
   }
 
   private streamingTextIdForCompletedBlock(index: number): string | undefined {

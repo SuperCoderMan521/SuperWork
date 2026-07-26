@@ -179,6 +179,70 @@ describe('DesktopEventAdapter', () => {
     ])
   })
 
+  test('uses different streaming message ids across conversation turns', () => {
+    const firstTurn = new DesktopEventAdapter('session-1', () => 100, 10)
+    const secondTurn = new DesktopEventAdapter('session-1', () => 100, 20)
+
+    const [first] = firstTurn.consume({
+      type: 'stream_event',
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'First answer' },
+      },
+    })
+    const [second] = secondTurn.consume({
+      type: 'stream_event',
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Second answer' },
+      },
+    })
+
+    expect(first?.type).toBe('message.delta')
+    expect(second?.type).toBe('message.delta')
+    if (first?.type !== 'message.delta' || second?.type !== 'message.delta') {
+      throw new Error('missing streaming deltas')
+    }
+    expect(first.messageId).not.toBe(second.messageId)
+  })
+
+  test('uses different streaming message ids for separate model responses in one turn', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+
+    const [first] = adapter.consume({
+      type: 'stream_event',
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'I will inspect the project.' },
+      },
+    })
+    adapter.consume({
+      type: 'assistant',
+      uuid: 'assistant-1',
+      message: {
+        content: [{ type: 'text', text: 'I will inspect the project.' }],
+      },
+    })
+    const [second] = adapter.consume({
+      type: 'stream_event',
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'The inspection is complete.' },
+      },
+    })
+
+    expect(first?.type).toBe('message.delta')
+    expect(second?.type).toBe('message.delta')
+    if (first?.type !== 'message.delta' || second?.type !== 'message.delta') {
+      throw new Error('missing streaming deltas')
+    }
+    expect(first.messageId).not.toBe(second.messageId)
+  })
+
   test('reserves display order for indexed streaming text so preceding thinking stays before the answer', () => {
     const adapter = new DesktopEventAdapter('session-1', () => 100)
 

@@ -67,8 +67,54 @@ describe('DesktopConversationController', () => {
     const assistantMessages = controller
       .getSession(session.id)
       ?.messages.filter(message => message.role === 'assistant')
-    expect(assistantMessages?.map(message => message.id)).toEqual(['streaming-assistant'])
+    expect(assistantMessages).toHaveLength(1)
+    expect(assistantMessages?.[0]?.id).toMatch(/^streaming-assistant-\d+-\d+$/)
     expect(assistantMessages?.[0]?.content).toBe('Hello')
+  })
+
+  test('keeps streaming message ids unique across sequential prompts', async () => {
+    let queryCount = 0
+    const events: DesktopEvent[] = []
+    const controller = new DesktopConversationController({
+      runQuery: () => {
+        queryCount += 1
+        const responseNumber = queryCount
+        const content = responseNumber === 1 ? 'First answer' : 'Second answer'
+        return (async function* (): AsyncGenerator<unknown> {
+          yield {
+            type: 'stream_event',
+            event: {
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'text_delta', text: content },
+            },
+          }
+          yield {
+            type: 'assistant',
+            uuid: `assistant-${responseNumber}`,
+            message: { content: [{ type: 'text', text: content }] },
+          }
+        })()
+      },
+      emit: event => events.push(event),
+      createId: () => 'session-1',
+      now: () => 100,
+      defaultModel: 'sonnet',
+      defaultMode: 'default',
+    })
+
+    const session = controller.createSession('G:/project')
+    await controller.submitPrompt(session.id, 'First prompt')
+    await controller.submitPrompt(session.id, 'Second prompt')
+
+    const deltaIds = events
+      .filter(event => event.type === 'message.delta')
+      .map(event => event.messageId)
+    expect(new Set(deltaIds).size).toBe(2)
+    const assistantIds = controller.getSession(session.id)?.messages
+      .filter(message => message.role === 'assistant')
+      .map(message => message.id)
+    expect(new Set(assistantIds).size).toBe(2)
   })
 
   test('rejects a second prompt while generation is active', async () => {

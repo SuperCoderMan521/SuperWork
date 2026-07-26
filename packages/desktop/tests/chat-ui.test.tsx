@@ -632,6 +632,45 @@ describe('desktop chat UI', () => {
     expect(files.map(file => file.path)).toEqual(['app.bundle.js', 'index.html'])
   })
 
+  test('does not extract web URLs as conversation files', () => {
+    const files = filesFromTools(
+      {
+        web: {
+          id: 'web',
+          name: 'WebFetch',
+          state: 'success',
+          summary: 'Fetched web sources',
+          output: [
+            'https://finance.sina.com.cn/roll/2026-01-02/doc-inhexryn9013336.shtml',
+            'http://auto.news18a.com/news/storys_240239.html',
+            'Generated report.html',
+          ].join('\n'),
+        },
+      },
+      ['web'],
+    )
+
+    expect(files.map(file => file.path)).toEqual(['report.html'])
+  })
+
+  test('does not extract decimal fragments as hidden files', () => {
+    const files = filesFromTools(
+      {
+        shell: {
+          id: 'shell',
+          name: 'BashTool',
+          state: 'success',
+          summary: 'Calculated scores',
+          input: { path: '.env' },
+          output: 'Scores: 0.9 0.07 2.3 3.78; generated result.json',
+        },
+      },
+      ['shell'],
+    )
+
+    expect(files.map(file => file.path)).toEqual(['.env', 'result.json'])
+  })
+
   test('renders a right-side editable file panel from tool paths', () => {
     const files = filesFromTools(session.tools, session.toolOrder)
     const activity = buildAgentActivity({}, [])

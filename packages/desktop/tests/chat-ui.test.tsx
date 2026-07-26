@@ -756,7 +756,10 @@ describe('desktop chat UI', () => {
     expect(html).toContain('dashboard.html')
     expect(html).toContain('html-preview')
     expect(html).toContain('local-artifact-frame')
+    expect(html).toContain('local-artifacts-full-preview')
     expect(html).toContain('sandbox="allow-scripts"')
+    expect(html).not.toContain('local-artifact-list')
+    expect(html).not.toContain('local-artifact-detail')
     expect(html).not.toContain('<aside>files</aside>')
   })
 

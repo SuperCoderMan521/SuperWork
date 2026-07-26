@@ -83,6 +83,7 @@ describe('desktop styles', () => {
     expect(css).toContain('.local-artifact-preview')
     expect(css).toContain('.local-artifact-frame')
     expect(css).toContain('min-height: 640px')
+    expect(css).toContain('.local-artifacts-full-preview')
     expect(css).toContain('.message-html-preview')
     expect(css).toContain('min-height: 520px')
   })

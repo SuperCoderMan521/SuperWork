@@ -36,6 +36,10 @@ function previewContent(
     : artifactContent
 }
 
+function isFullPreviewArtifact(artifact: DesktopLocalArtifact): boolean {
+  return artifact.kind === 'html' || artifact.kind === 'svg'
+}
+
 function ArtifactPreview({
   artifact,
   content,
@@ -94,18 +98,17 @@ export function LocalArtifactsPanel({
 }: LocalArtifactsPanelProps): React.ReactNode {
   const selected = selectedArtifact(artifacts, selectedArtifactId)
   const content = selected ? previewContent(selected, artifactContent) : null
+  const fullPreview = selected ? isFullPreviewArtifact(selected) : false
 
   return (
-    <aside className="local-artifacts-panel">
-      <header>
-        <h2>Artifacts</h2>
-        <span>{artifacts.length}</span>
-      </header>
+    <aside className={fullPreview ? 'local-artifacts-panel local-artifacts-full-preview' : 'local-artifacts-panel'}>
       {artifacts.length === 0 ? (
         <div className="local-artifact-empty">
           <strong>还没有本地 Artifacts</strong>
           <p>生成 HTML、Markdown、Mermaid、PlantUML 或写入相关文件后会显示在这里。</p>
         </div>
+      ) : fullPreview && selected ? (
+        <ArtifactPreview artifact={selected} content={content} />
       ) : (
         <div className="local-artifacts-layout">
           <ul className="local-artifact-list">

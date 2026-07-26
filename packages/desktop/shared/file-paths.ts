@@ -11,6 +11,9 @@ const PATH_TOKEN_PATTERN =
 const BARE_FILE_PATTERN =
   /\b(?:[A-Za-z0-9][A-Za-z0-9_.@~-]*\.[A-Za-z][A-Za-z0-9_-]{0,10}|(?:\.[A-Za-z0-9][A-Za-z0-9._-]*))\b/g
 
+const URI_TOKEN_PATTERN =
+  /\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s'"`<>|]+/g
+
 function stripWrappingPunctuation(value: string): string {
   return value.replace(/^[("'`<[\{]+|[)"'`>\]}.,;:!?]+$/g, '')
 }
@@ -22,6 +25,7 @@ function baseName(path: string): string {
 function hasUsefulFilenameShape(path: string): boolean {
   const name = baseName(path)
   if (SPECIAL_FILENAMES.has(name)) return true
+  if (/^\.\d+(?:\.\d+)*$/.test(name)) return false
   if (/^\.[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) return true
   return /[A-Za-z]/.test(name) && /\.[A-Za-z][A-Za-z0-9_-]{0,10}$/.test(name)
 }
@@ -37,16 +41,17 @@ export function looksLikeFilePath(value: string): boolean {
 }
 
 export function extractPathCandidates(text: string): string[] {
+  const pathText = text.replace(URI_TOKEN_PATTERN, match => ' '.repeat(match.length))
   const candidates = new Set<string>()
-  for (const match of text.match(PATH_TOKEN_PATTERN) ?? []) {
+  for (const match of pathText.match(PATH_TOKEN_PATTERN) ?? []) {
     candidates.add(stripWrappingPunctuation(match))
   }
-  for (const match of text.matchAll(BARE_FILE_PATTERN)) {
+  for (const match of pathText.matchAll(BARE_FILE_PATTERN)) {
     const raw = match[0]
     const index = match.index ?? -1
     if (index < 0) continue
-    const before = text[index - 1]
-    const after = text[index + raw.length]
+    const before = pathText[index - 1]
+    const after = pathText[index + raw.length]
     if (before === '/' || before === '\\') continue
     if (after === '/' || after === '\\') continue
     candidates.add(stripWrappingPunctuation(raw))

@@ -29,6 +29,22 @@ type EngineState = {
   commands: Command[]
 }
 
+export type DesktopSessionBootstrap = {
+  setOriginalCwd: (cwd: string) => void
+  switchSession: (
+    sessionId: never,
+    projectDir?: string | null,
+  ) => unknown
+}
+
+export function activateDesktopSessionStorage(
+  bootstrap: DesktopSessionBootstrap,
+  session: Pick<QueryRunInput['session'], 'id' | 'cwd'>,
+): void {
+  bootstrap.setOriginalCwd(session.cwd)
+  bootstrap.switchSession(session.id as never)
+}
+
 type DesktopCanUseToolOptions = {
   sessionId: string
   appState: AppState
@@ -166,6 +182,8 @@ export class DesktopQueryRunner {
 
   async *run(input: QueryRunInput): AsyncGenerator<unknown> {
     console.error(`[desktop-core] query.start session=${input.session.id}`)
+    const bootstrapModule = await import('src/bootstrap/state.js')
+    activateDesktopSessionStorage(bootstrapModule, input.session)
     const state = await this.getOrCreateEngine(input)
     console.error(`[desktop-core] query.engine_ready session=${input.session.id}`)
     state.engine.resetAbortController()
@@ -223,7 +241,7 @@ export class DesktopQueryRunner {
     if (existing) return existing
 
     console.error(`[desktop-core] query.create_engine session=${input.session.id}`)
-    const [queryEngineModule, toolsModule, toolModule, commandModule, agentModule, stateModule, cacheModule, bootstrapModule] =
+    const [queryEngineModule, toolsModule, toolModule, commandModule, agentModule, stateModule, cacheModule] =
       await Promise.all([
         import('src/QueryEngine.js'),
         import('src/tools.js'),
@@ -232,11 +250,7 @@ export class DesktopQueryRunner {
         import('@claude-code-best/builtin-tools/tools/AgentTool/loadAgentsDir.js'),
         import('src/state/AppStateStore.js'),
         import('src/utils/fileStateCache.js'),
-        import('src/bootstrap/state.js'),
       ])
-
-    bootstrapModule.switchSession(input.session.id as never, input.session.cwd)
-    bootstrapModule.setOriginalCwd(input.session.cwd)
 
     const permissionContext = toolModule.getEmptyToolPermissionContext()
     permissionContext.mode = input.session.mode

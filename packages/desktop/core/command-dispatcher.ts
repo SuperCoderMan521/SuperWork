@@ -25,7 +25,7 @@ export interface DesktopConversationCommands {
 
 type CommandDispatcherOptions = {
   controller: DesktopConversationCommands
-  listSessions: () => Promise<DesktopSessionSummary[]>
+  listSessions: (cwd?: string) => Promise<DesktopSessionSummary[]>
   resumeSession?: (sessionId: string) => Promise<void>
   deleteSession?: (sessionId: string) => Promise<void>
   emitSnapshot?: (sessionId: string) => void
@@ -78,7 +78,7 @@ export class DesktopCommandDispatcher {
         this.options.emit({
           type: 'session.listed',
           requestId: command.requestId,
-          sessions: await this.options.listSessions(),
+          sessions: await this.options.listSessions(command.cwd),
         })
         return
       case 'session.create':

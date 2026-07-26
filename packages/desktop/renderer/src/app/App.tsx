@@ -258,7 +258,7 @@ export function App(): React.ReactNode {
       }
       dispatch(event)
     })
-    window.desktopApi.listSessions()
+    window.desktopApi.listSessions(storedWorkspace ?? undefined)
     window.desktopApi.getBuddy()
     return unsubscribe
   }, [])

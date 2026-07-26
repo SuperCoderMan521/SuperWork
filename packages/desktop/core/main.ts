@@ -12,6 +12,7 @@ import { DesktopBuddyService } from './buddy-service.js'
 import { DesktopPerformanceService } from './performance-service.js'
 import { DesktopAgentMailboxService } from './agent-mailbox-service.js'
 import { DesktopScheduledTasksService } from './scheduled-tasks-service.js'
+import { copyLegacyDesktopTranscripts } from './legacy-session-migration.js'
 
 /**
  * Writes a leveled log line to stderr so it never pollutes the JSON Lines
@@ -115,7 +116,24 @@ async function main(): Promise<void> {
 
   const dispatcher = new DesktopCommandDispatcher({
     controller,
-    listSessions: () => sessionService.list(),
+    listSessions: async cwd => {
+      if (cwd) {
+        const migration = await copyLegacyDesktopTranscripts(
+          cwd,
+          storageModule.getProjectDir(cwd),
+        )
+        if (migration.copied.length > 0) {
+          logCore(
+            'info',
+            `history migrated cwd=${cwd} count=${migration.copied.length}`,
+          )
+        }
+        for (const warning of migration.warnings) {
+          logCore('error', warning)
+        }
+      }
+      return sessionService.list()
+    },
     resumeSession: async sessionId => {
       controller?.restoreSession(
         sessionService.summarySnapshot(sessionId, defaultModel, 'default'),

@@ -257,7 +257,10 @@ export const BuddySnapshotSchema = z.object({
 })
 
 export const DesktopCommandSchema = z.discriminatedUnion('type', [
-  RequestSchema.extend({ type: z.literal('session.list') }),
+  RequestSchema.extend({
+    type: z.literal('session.list'),
+    cwd: z.string().min(1).optional(),
+  }),
   RequestSchema.extend({
     type: z.literal('session.create'),
     cwd: z.string().min(1),

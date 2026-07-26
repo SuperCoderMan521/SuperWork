@@ -15,7 +15,7 @@ export type DesktopEventSubscriber = (
 ) => () => void
 
 export type DesktopApi = {
-  listSessions(): void
+  listSessions(cwd?: string): void
   createSession(cwd: string): void
   resumeSession(sessionId: string): void
   deleteSession(sessionId: string): void
@@ -71,8 +71,12 @@ export function createDesktopApi(
 ): DesktopApi {
   const request = () => createRequestId()
   return Object.freeze({
-    listSessions: () =>
-      send({ type: 'session.list', requestId: request() }),
+    listSessions: cwd =>
+      send({
+        type: 'session.list',
+        requestId: request(),
+        ...(cwd ? { cwd } : {}),
+      }),
     createSession: cwd =>
       send({ type: 'session.create', requestId: request(), cwd }),
     resumeSession: sessionId =>

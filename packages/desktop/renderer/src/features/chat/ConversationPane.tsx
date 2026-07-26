@@ -6,6 +6,8 @@ import type {
   PermissionDecision,
 } from '../../../../shared/protocol.js'
 import type { RendererSession } from '../../app/reducer.js'
+import { LocalArtifactCard } from '../artifacts/LocalArtifactCard.js'
+import type { DesktopLocalArtifact } from '../artifacts/localArtifacts.js'
 import { PermissionPanel } from '../permissions/PermissionPanel.js'
 import { Composer } from './Composer.js'
 import { MessageRow } from './MessageRow.js'
@@ -19,6 +21,9 @@ type ConversationPaneProps = {
   onInterrupt: () => void
   onSelectWorkspace: () => void
   onOpenFile?: (path: string) => void
+  onOpenAgents?: () => void
+  artifacts?: DesktopLocalArtifact[]
+  onOpenArtifact?: (artifact: DesktopLocalArtifact) => void
   onResolvePermission?: (
     permissionId: string,
     decision: PermissionDecision,
@@ -154,7 +159,17 @@ function conversationToolIsVisible(
   _session: RendererSession,
   tool: DesktopToolCall,
 ): boolean {
-  return tool.state === 'running' || tool.state === 'pending'
+  if (tool.state === 'running' || tool.state === 'pending') return true
+  return [
+    'agent',
+    'teamcreate',
+    'teamdelete',
+    'taskcreate',
+    'taskupdate',
+    'tasklist',
+    'taskget',
+    'sendmessage',
+  ].includes(tool.name.toLowerCase())
 }
 
 function getVisibleConversationTimeline(
@@ -206,12 +221,24 @@ function ToolGroup({
   name,
   items,
   onOpenFile,
+  onOpenAgents,
 }: {
   name: string
   items: ToolTimelineItem[]
   onOpenFile?: (path: string) => void
+  onOpenAgents?: () => void
 }): React.ReactNode {
   const meta = toolDisplayMeta(name)
+  const opensAgents = [
+    'agent',
+    'teamcreate',
+    'teamdelete',
+    'taskcreate',
+    'taskupdate',
+    'tasklist',
+    'taskget',
+    'sendmessage',
+  ].includes(name.toLowerCase())
   return (
     <details className="tool-group tool-group-running">
       <summary>
@@ -222,6 +249,20 @@ function ToolGroup({
         <span className="tool-group-description" title={activeToolSummary(items)}>
           {activeToolSummary(items)}
         </span>
+        {opensAgents && onOpenAgents ? (
+          <button
+            type="button"
+            className="tool-open-agents"
+            title={'打开 Agent 观测'}
+            aria-label="打开 Agent 观测"
+            onClick={event => {
+              event.preventDefault()
+              onOpenAgents()
+            }}
+          >
+            观测
+          </button>
+        ) : null}
       </summary>
       {items.map(item => (
         <ToolCallCard
@@ -241,6 +282,9 @@ export function ConversationPane({
   onInterrupt,
   onSelectWorkspace,
   onOpenFile,
+  onOpenAgents,
+  artifacts = [],
+  onOpenArtifact,
   onResolvePermission,
   error,
   onDismissError,
@@ -258,6 +302,20 @@ export function ConversationPane({
       (item.message.kind === 'thinking' || item.message.kind === 'redacted_thinking'),
   )?.id
   const workspaceMissing = session.cwd.trim() === '.' || session.cwd.trim() === ''
+  const artifactsByMessageId = new Map<string, DesktopLocalArtifact[]>()
+  const artifactsByToolCallId = new Map<string, DesktopLocalArtifact[]>()
+  for (const artifact of artifacts) {
+    if (artifact.messageId) {
+      const list = artifactsByMessageId.get(artifact.messageId) ?? []
+      list.push(artifact)
+      artifactsByMessageId.set(artifact.messageId, list)
+    }
+    if (artifact.toolCallId) {
+      const list = artifactsByToolCallId.get(artifact.toolCallId) ?? []
+      list.push(artifact)
+      artifactsByToolCallId.set(artifact.toolCallId, list)
+    }
+  }
 
   useEffect(() => {
     const list = listRef.current
@@ -306,25 +364,45 @@ export function ConversationPane({
                 name={group.name}
                 items={group.items}
                 onOpenFile={onOpenFile}
+                onOpenAgents={onOpenAgents}
               />
             )
           }
           const item = group.item
           return item.type === 'message' ? (
-            <MessageRow
-              key={group.key}
-              message={item.message}
-              showThinkingMeta={item.id === thinkingMetaMessageId}
-            />
+            <div key={group.key} className="message-with-artifacts">
+              <MessageRow
+                message={item.message}
+                showThinkingMeta={item.id === thinkingMetaMessageId}
+              />
+              {(artifactsByMessageId.get(item.message.id) ?? []).map(artifact => (
+                <LocalArtifactCard
+                  key={artifact.id}
+                  artifact={artifact}
+                  onOpenArtifact={onOpenArtifact}
+                  onOpenFile={onOpenFile}
+                />
+              ))}
+            </div>
           ) : item.type === 'usage' ? (
             <TurnUsageReport key={group.key} report={item.report} />
           ) : (
-            <ToolGroup
-              key={group.key}
-              name={item.tool.name}
-              items={[item]}
-              onOpenFile={onOpenFile}
-            />
+            <div key={group.key} className="tool-with-artifacts">
+              <ToolGroup
+                name={item.tool.name}
+                items={[item]}
+                onOpenFile={onOpenFile}
+                onOpenAgents={onOpenAgents}
+              />
+              {(artifactsByToolCallId.get(item.tool.id) ?? []).map(artifact => (
+                <LocalArtifactCard
+                  key={artifact.id}
+                  artifact={artifact}
+                  onOpenArtifact={onOpenArtifact}
+                  onOpenFile={onOpenFile}
+                />
+              ))}
+            </div>
           )
         })}
       </section>

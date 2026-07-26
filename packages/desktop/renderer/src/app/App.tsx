@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type {
   DesktopConfigSnapshot,
   DesktopEvent,
+  DesktopAgentMailboxSnapshot,
   DesktopMemoryFile,
   DesktopModelConnectionResult,
   DesktopModelConfig,
@@ -23,6 +24,15 @@ import { BrandName } from '../components/BrandName.js'
 import { BuddyPanel } from '../features/buddy/BuddyPanel.js'
 import { PerformanceCenter } from '../features/performance/PerformanceCenter.js'
 import type { BuddySnapshot } from '../../../shared/protocol.js'
+import { buildAgentActivity } from '../features/agents/AgentActivityPanel.js'
+import {
+  deriveLocalArtifacts,
+  type DesktopLocalArtifact,
+} from '../features/artifacts/localArtifacts.js'
+import {
+  WorkspacePanel,
+  type WorkspaceTab,
+} from '../features/workspace/WorkspacePanel.js'
 import { ResizableWorkspace } from './ResizableWorkspace.js'
 import {
   createDesktopState,
@@ -111,6 +121,7 @@ export function App(): React.ReactNode {
   const [view, setView] = useState<View>('chat')
   const [settingsTab, setSettingsTab] = useState<ConfigTab>('model')
   const [filePanelOpen, setFilePanelOpen] = useState(true)
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('files')
   const [config, setConfig] = useState<DesktopConfigSnapshot | null>(null)
   const [memoryFile, setMemoryFile] = useState<
     (DesktopMemoryFile & { content?: string }) | null
@@ -121,21 +132,26 @@ export function App(): React.ReactNode {
   const [connectionTesting, setConnectionTesting] = useState(false)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null)
+  const [artifactContent, setArtifactContent] = useState<string | null>(null)
   const [storedWorkspace, setStoredWorkspace] = useState<string | null>(() =>
     readStoredWorkspace(),
   )
   const [buddy, setBuddy] = useState<BuddySnapshot | null>(null)
   const [performance, setPerformance] = useState<DesktopPerformanceSnapshot | null>(null)
+  const [agentMailbox, setAgentMailbox] = useState<DesktopAgentMailboxSnapshot | null>(null)
   const [performanceRange, setPerformanceRange] = useState<DesktopPerformanceRange>('30d')
   const [performanceLoading, setPerformanceLoading] = useState(false)
   const [performanceError, setPerformanceError] = useState<string | null>(null)
   const pendingWorkspaceSession = useRef<string | null>(null)
   const pendingPrompt = useRef<string | null>(null)
+  const pendingArtifactPath = useRef<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = window.desktopApi.subscribe(event => {
       if (event.type === 'buddy.snapshot') { setBuddy(event.state); return }
       if (event.type === 'performance.snapshot') { setPerformance(event.snapshot); setPerformanceLoading(false); setPerformanceError(null); return }
+      if (event.type === 'agent.mailbox.snapshot') { setAgentMailbox(event.snapshot); return }
       if (event.type === 'command.failed' && !event.sessionId) { setPerformanceLoading(false); setPerformanceError(event.error.message) }
       if (event.type === 'session.snapshot') {
         const createdSessionId = sessionIdFromPendingWorkspaceSnapshot(
@@ -188,6 +204,11 @@ export function App(): React.ReactNode {
         return
       }
       if (event.type === 'file.loaded' || event.type === 'file.saved') {
+        if (pendingArtifactPath.current === event.path) {
+          pendingArtifactPath.current = null
+          setArtifactContent(event.content)
+          return
+        }
         setSelectedFilePath(event.path)
         setFileContent(event.content)
         setFilePanelOpen(true)
@@ -211,6 +232,10 @@ export function App(): React.ReactNode {
       ? 'failed'
       : 'starting'
   const files = selected ? filesFromTools(selected.tools, selected.toolOrder) : []
+  const localArtifacts = selected ? deriveLocalArtifacts(selected) : []
+  const agentActivity = selected
+    ? buildAgentActivity(selected.tools, selected.toolOrder, agentMailbox)
+    : buildAgentActivity({}, [])
   const defaultWorkspace =
     selected?.cwd ?? sessions[0]?.cwd ?? storedWorkspace ?? PROJECT_DEFAULT_CWD
 
@@ -219,6 +244,11 @@ export function App(): React.ReactNode {
     const latestSession = sessions[0]
     if (latestSession) setSelectedId(latestSession.id)
   }, [sessions, selectedId, state.selectedSessionId])
+
+  useEffect(() => {
+    if (!selected) return
+    window.desktopApi.getAgentMailbox(selected.cwd)
+  }, [selected?.id, selected?.toolOrder.length, selected?.generationState])
 
   const refreshDiagnostics = async () =>
     setDiagnostics(await window.desktopApi.getDiagnostics())
@@ -293,10 +323,34 @@ export function App(): React.ReactNode {
 
   const openFile = (path: string) => {
     if (!selected) return
+    setWorkspaceTab('files')
     setSelectedFilePath(path)
     setFileContent(null)
     setFilePanelOpen(true)
     window.desktopApi.readFile(path, selected.cwd)
+  }
+
+  const openArtifact = (artifact: DesktopLocalArtifact) => {
+    if (!selected) return
+    setWorkspaceTab('artifacts')
+    setFilePanelOpen(true)
+    setSelectedArtifactId(artifact.id)
+    if (artifact.source === 'message') {
+      pendingArtifactPath.current = null
+      setArtifactContent(artifact.content ?? null)
+      return
+    }
+    setArtifactContent(null)
+    if (artifact.path) {
+      pendingArtifactPath.current = artifact.path
+      window.desktopApi.readFile(artifact.path, selected.cwd)
+    }
+  }
+
+  const openAgents = () => {
+    setWorkspaceTab('agents')
+    setFilePanelOpen(true)
+    if (selected) window.desktopApi.getAgentMailbox(selected.cwd)
   }
 
   const submitPrompt = (text: string) => {
@@ -430,6 +484,9 @@ export function App(): React.ReactNode {
             onInterrupt={interruptSelected}
             onSelectWorkspace={() => void createSessionFromPicker()}
             onOpenFile={openFile}
+            onOpenAgents={openAgents}
+            artifacts={localArtifacts}
+            onOpenArtifact={openArtifact}
           onResolvePermission={(permissionId, decision) =>
             window.desktopApi.resolvePermission(permissionId, decision)
           }
@@ -443,17 +500,30 @@ export function App(): React.ReactNode {
       }
       files={
         selected ? (
-          <ConversationFilesPanel
-            files={files}
-            selectedPath={selectedFilePath}
-            fileContent={fileContent}
-            onOpen={openFile}
-            workspace={selected.cwd}
-            onListWorkspaceEditors={refresh =>
-              window.desktopApi.listWorkspaceEditors(refresh)
-            }
-            onOpenWorkspaceInEditor={(editorId, workspace) =>
-              window.desktopApi.openWorkspaceInEditor(editorId, workspace)
+          <WorkspacePanel
+            fileCount={files.length}
+            agentActivity={agentActivity}
+            artifacts={localArtifacts}
+            selectedArtifactId={selectedArtifactId}
+            artifactContent={artifactContent}
+            onSelectArtifact={openArtifact}
+            onOpenFile={openFile}
+            activeTab={workspaceTab}
+            onTabChange={setWorkspaceTab}
+            files={
+              <ConversationFilesPanel
+                files={files}
+                selectedPath={selectedFilePath}
+                fileContent={fileContent}
+                onOpen={openFile}
+                workspace={selected.cwd}
+                onListWorkspaceEditors={refresh =>
+                  window.desktopApi.listWorkspaceEditors(refresh)
+                }
+                onOpenWorkspaceInEditor={(editorId, workspace) =>
+                  window.desktopApi.openWorkspaceInEditor(editorId, workspace)
+                }
+              />
             }
           />
         ) : null

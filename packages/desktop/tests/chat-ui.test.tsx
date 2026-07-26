@@ -19,6 +19,12 @@ import {
   filesFromTools,
 } from '../renderer/src/features/files/ConversationFilesPanel.js'
 import {
+  AgentActivityPanel,
+  buildAgentActivity,
+} from '../renderer/src/features/agents/AgentActivityPanel.js'
+import type { DesktopLocalArtifact } from '../renderer/src/features/artifacts/localArtifacts.js'
+import { WorkspacePanel } from '../renderer/src/features/workspace/WorkspacePanel.js'
+import {
   SessionSidebar,
   groupSessionsByWorkspace,
 } from '../renderer/src/features/history/SessionSidebar.js'
@@ -146,6 +152,7 @@ describe('desktop chat UI', () => {
         onInterrupt={() => {}}
         onSelectWorkspace={() => {}}
         onOpenFile={() => {}}
+        onOpenAgents={() => {}}
       />,
     )
     expect(html).toContain('Hello')
@@ -203,6 +210,7 @@ describe('desktop chat UI', () => {
         onInterrupt={() => {}}
         onSelectWorkspace={() => {}}
         onOpenFile={() => {}}
+        onOpenAgents={() => {}}
       />,
     )
 
@@ -238,6 +246,7 @@ describe('desktop chat UI', () => {
         onInterrupt={() => {}}
         onSelectWorkspace={() => {}}
         onOpenFile={() => {}}
+        onOpenAgents={() => {}}
       />,
     )
 
@@ -276,6 +285,52 @@ describe('desktop chat UI', () => {
     expect(html).toContain('message-kind-thinking')
     expect(html).toContain('thinking-block thinking-assistant')
     expect(html).toContain('思考过程')
+  })
+
+  test('renders local artifact cards after matching assistant messages', () => {
+    const artifactSession: RendererSession = {
+      ...session,
+      messages: {
+        'message-1': {
+          id: 'message-1',
+          role: 'assistant',
+          kind: 'text',
+          content: '```html\n<h1>Dashboard</h1>\n```',
+          createdAt: 100,
+          displayOrder: 1,
+        },
+      },
+      messageOrder: ['message-1'],
+      tools: {},
+      toolOrder: [],
+    }
+    const artifacts: DesktopLocalArtifact[] = [
+      {
+        id: 'message:message-1:0',
+        source: 'message',
+        title: 'html 片段',
+        kind: 'html',
+        status: 'ready',
+        content: '<h1>Dashboard</h1>',
+        messageId: 'message-1',
+        createdAt: 100,
+        displayOrder: 1,
+      },
+    ]
+    const html = renderToStaticMarkup(
+      <ConversationPane
+        session={artifactSession}
+        artifacts={artifacts}
+        onOpenArtifact={() => {}}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+      />,
+    )
+
+    expect(html).toContain('Local Artifact')
+    expect(html).toContain('html 片段')
+    expect(html).toContain('预览')
   })
 
   test('shows generation and query failure feedback', () => {
@@ -412,6 +467,58 @@ describe('desktop chat UI', () => {
     expect(html).not.toContain('src/app.ts')
   })
 
+  test('keeps completed multi-agent tool frames visible in the conversation', () => {
+    const html = renderToStaticMarkup(
+      <ConversationPane
+        session={{
+          ...session,
+          generationState: 'idle',
+          messages: {},
+          messageOrder: [],
+          tools: {
+            agent: {
+              id: 'agent',
+              name: 'Agent',
+              state: 'success',
+              summary: 'researcher',
+              input: {
+                name: 'researcher',
+                team_name: 'refactor-ui',
+                subagent_type: 'worker',
+              },
+              output: 'Agent launched',
+              startedAt: 1,
+              completedAt: 2,
+            },
+            team: {
+              id: 'team',
+              name: 'TeamCreate',
+              state: 'success',
+              summary: 'refactor-ui',
+              input: { team_name: 'refactor-ui' },
+              startedAt: 3,
+              completedAt: 4,
+            },
+          },
+          toolOrder: ['agent', 'team'],
+        }}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+        onOpenFile={() => {}}
+        onOpenAgents={() => {}}
+      />,
+    )
+
+    expect(html).toContain('tool-card')
+    expect(html).toContain('Agent')
+    expect(html).toContain('tool-open-agents')
+    expect(html).toContain('title="打开 Agent 观测"')
+    expect(html).toContain('researcher')
+    expect(html).toContain('创建团队')
+    expect(html).toContain('refactor-ui')
+  })
+
   test('renders active edit tools as one collapsed progress group with file details', () => {
     const html = renderToStaticMarkup(
       <ConversationPane
@@ -527,18 +634,108 @@ describe('desktop chat UI', () => {
 
   test('renders a right-side editable file panel from tool paths', () => {
     const files = filesFromTools(session.tools, session.toolOrder)
+    const activity = buildAgentActivity({}, [])
     const html = renderToStaticMarkup(
-      <ConversationFilesPanel
-        files={files}
-        selectedPath="src/query.ts"
-        fileContent="export const ok = true"
-        onOpen={() => {}}
+      <WorkspacePanel
+        fileCount={files.length}
+        agentActivity={activity}
+        files={
+          <ConversationFilesPanel
+            files={files}
+            selectedPath="src/query.ts"
+            fileContent="export const ok = true"
+            onOpen={() => {}}
+          />
+        }
       />,
     )
     expect(html).toContain('文件')
+    expect(html).toContain('workspace-tabs')
+    expect(html).toContain('Agent')
     expect(html).toContain('src/query.ts')
     expect(html).not.toContain('保存')
     expect(html).toContain('export const ok')
+  })
+
+  test('can render the right workspace directly on the Agent tab', () => {
+    const activity = buildAgentActivity(
+      {
+        agent: {
+          id: 'agent',
+          name: 'Agent',
+          state: 'success',
+          summary: 'researcher',
+          input: { name: 'researcher' },
+        },
+      },
+      ['agent'],
+    )
+    const html = renderToStaticMarkup(
+      <WorkspacePanel
+        fileCount={0}
+        activeTab="agents"
+        onTabChange={() => {}}
+        agentActivity={activity}
+        files={<aside>files</aside>}
+      />,
+    )
+
+    expect(html).toContain('aria-selected="true"')
+    expect(html).toContain('Agent 观测')
+    expect(html).toContain('researcher')
+    expect(html).not.toContain('<aside>files</aside>')
+  })
+
+  test('can render the right workspace directly on the Artifacts tab', () => {
+    const artifacts: DesktopLocalArtifact[] = [
+      {
+        id: 'file:g:/tmp/dashboard.html',
+        source: 'file',
+        title: 'dashboard.html',
+        kind: 'html',
+        status: 'ready',
+        path: 'G:/tmp/dashboard.html',
+        content: '<h1>Dashboard</h1>',
+        createdAt: 100,
+      },
+    ]
+    const html = renderToStaticMarkup(
+      <WorkspacePanel
+        fileCount={0}
+        activeTab="artifacts"
+        onTabChange={() => {}}
+        agentActivity={buildAgentActivity({}, [])}
+        artifacts={artifacts}
+        selectedArtifactId="file:g:/tmp/dashboard.html"
+        artifactContent="<h1>Dashboard</h1>"
+        onSelectArtifact={() => {}}
+        files={<aside>files</aside>}
+      />,
+    )
+
+    expect(html).toContain('Artifacts')
+    expect(html).toContain('dashboard.html')
+    expect(html).toContain('html-preview')
+    expect(html).toContain('sandbox=""')
+    expect(html).not.toContain('<aside>files</aside>')
+  })
+
+  test('renders an empty local artifacts state', () => {
+    const html = renderToStaticMarkup(
+      <WorkspacePanel
+        fileCount={0}
+        activeTab="artifacts"
+        onTabChange={() => {}}
+        agentActivity={buildAgentActivity({}, [])}
+        artifacts={[]}
+        selectedArtifactId={null}
+        artifactContent={null}
+        onSelectArtifact={() => {}}
+        files={<aside>files</aside>}
+      />,
+    )
+
+    expect(html).toContain('还没有本地 Artifacts')
   })
 
   test('renders installed workspace editors and editor menu states', () => {
@@ -585,6 +782,157 @@ describe('desktop chat UI', () => {
     expect(html).toContain('language-ts')
     expect(html).toContain('line-number')
     expect(html).toContain('export')
+  })
+
+  test('builds agent task ownership and mailbox communication from tool events', () => {
+    const activity = buildAgentActivity(
+      {
+        team: {
+          id: 'team',
+          name: 'TeamCreate',
+          state: 'success',
+          summary: 'refactor-ui',
+          input: { team_name: 'refactor-ui' },
+          startedAt: 100,
+        },
+        task: {
+          id: 'task',
+          name: 'TaskCreate',
+          state: 'success',
+          summary: 'Analyze AgentTool',
+          input: {
+            subject: 'Analyze AgentTool',
+            description: 'Find trigger path',
+          },
+          output: JSON.stringify({ taskId: 'task-1' }),
+          startedAt: 110,
+        },
+        agent: {
+          id: 'agent',
+          name: 'Agent',
+          state: 'running',
+          summary: 'researcher',
+          input: {
+            name: 'researcher',
+            team_name: 'refactor-ui',
+            subagent_type: 'worker',
+          },
+          startedAt: 120,
+        },
+        assign: {
+          id: 'assign',
+          name: 'TaskUpdate',
+          state: 'success',
+          summary: 'Assign task',
+          input: {
+            taskId: 'task-1',
+            owner: 'researcher',
+            status: 'in_progress',
+          },
+          startedAt: 130,
+        },
+        mail: {
+          id: 'mail',
+          name: 'SendMessage',
+          state: 'success',
+          summary: 'progress',
+          input: {
+            to: 'team-lead',
+            message: '已定位 AgentTool 入口',
+          },
+          startedAt: 140,
+        },
+      },
+      ['team', 'task', 'agent', 'assign', 'mail'],
+    )
+
+    expect(activity.teamName).toBe('refactor-ui')
+    expect(activity.tasks[0]).toMatchObject({
+      id: 'task-1',
+      subject: 'Analyze AgentTool',
+      owner: 'researcher',
+      status: 'in_progress',
+    })
+    expect(activity.agents[0]).toMatchObject({
+      name: 'researcher',
+      status: 'running',
+      currentTasks: ['Analyze AgentTool'],
+    })
+    const progress = activity.messages.find(message => message.text === '已定位 AgentTool 入口')
+    expect(progress).toMatchObject({
+      from: 'researcher',
+      to: 'team-lead',
+      text: '已定位 AgentTool 入口',
+    })
+  })
+
+  test('renders a polished agent observation panel in the right workspace', () => {
+    const activity = buildAgentActivity(
+      {
+        agent: {
+          id: 'agent',
+          name: 'Agent',
+          state: 'running',
+          summary: 'tester',
+          input: { name: 'tester', team_name: 'fix-team' },
+        },
+        task: {
+          id: 'task',
+          name: 'TaskCreate',
+          state: 'success',
+          summary: 'Fix message ordering',
+          input: { subject: 'Fix message ordering' },
+          output: JSON.stringify({ taskId: 'order-fix' }),
+        },
+        assign: {
+          id: 'assign',
+          name: 'TaskUpdate',
+          state: 'success',
+          summary: 'tester',
+          input: {
+            taskId: 'order-fix',
+            owner: 'tester',
+            status: 'in_progress',
+          },
+        },
+      },
+      ['agent', 'task', 'assign'],
+    )
+    const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
+
+    expect(html).toContain('agent-observer-panel')
+    expect(html).toContain('Agent 观测')
+    expect(html).toContain('fix-team')
+    expect(html).toContain('Fix message ordering')
+    expect(html).toContain('tester')
+    expect(html).toContain('运行中')
+  })
+
+  test('merges read-only mailbox messages into agent activity', () => {
+    const activity = buildAgentActivity({}, [], {
+      generatedAt: 100,
+      teams: [{
+        name: 'mail-team',
+        inboxes: [{
+          agentName: 'team-lead',
+          messages: [{
+            from: 'researcher',
+            text: '已完成代码搜索',
+            timestamp: '2026-07-26T00:00:00.000Z',
+            read: false,
+            summary: '完成搜索',
+          }],
+        }],
+      }],
+    })
+
+    expect(activity.teamName).toBe('mail-team')
+    expect(activity.agents.map(agent => agent.name)).toContain('researcher')
+    expect(activity.messages[0]).toMatchObject({
+      from: 'researcher',
+      to: 'team-lead',
+      text: '已完成代码搜索',
+    })
   })
 
   test('calculates edit diff blocks and tool icons', () => {

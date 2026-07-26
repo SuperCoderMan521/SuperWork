@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   App,
   defaultWorkspaceForNewSession,
+  settingsCwdForConfig,
   sessionIdFromPendingWorkspaceSnapshot,
   selectSidebarSessions,
   tabFromSlash,
@@ -45,6 +46,13 @@ describe('defaultWorkspaceForNewSession', () => {
   test('uses the current session cwd before falling back to project cwd', () => {
     expect(defaultWorkspaceForNewSession('G:/project', 'G:/fallback')).toBe('G:/project')
     expect(defaultWorkspaceForNewSession(null, 'G:/fallback')).toBe('G:/fallback')
+  })
+})
+
+describe('settingsCwdForConfig', () => {
+  test('uses the default workspace when no conversation is selected', () => {
+    expect(settingsCwdForConfig(null, 'G:/fallback')).toBe('G:/fallback')
+    expect(settingsCwdForConfig('G:/project', 'G:/fallback')).toBe('G:/project')
   })
 })
 

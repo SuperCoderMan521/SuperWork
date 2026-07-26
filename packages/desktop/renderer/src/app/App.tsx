@@ -69,6 +69,13 @@ export function defaultWorkspaceForNewSession(
   return currentSessionCwd || projectDefault
 }
 
+export function settingsCwdForConfig(
+  currentSessionCwd: string | null | undefined,
+  defaultWorkspace: string,
+): string {
+  return currentSessionCwd || defaultWorkspace
+}
+
 export function selectSidebarSessions(
   state: DesktopRendererState,
 ): DesktopSessionSummary[] {
@@ -238,6 +245,7 @@ export function App(): React.ReactNode {
     : buildAgentActivity({}, [])
   const defaultWorkspace =
     selected?.cwd ?? sessions[0]?.cwd ?? storedWorkspace ?? PROJECT_DEFAULT_CWD
+  const settingsCwd = settingsCwdForConfig(selected?.cwd, defaultWorkspace)
 
   useEffect(() => {
     if (selectedId || state.selectedSessionId) return
@@ -254,9 +262,13 @@ export function App(): React.ReactNode {
     setDiagnostics(await window.desktopApi.getDiagnostics())
 
   const refreshConfig = () => {
-    const cwd = selected?.cwd ?? defaultWorkspace
-    if (cwd) window.desktopApi.getConfig(cwd)
+    if (settingsCwd) window.desktopApi.getConfig(settingsCwd)
   }
+
+  useEffect(() => {
+    if (view !== 'settings') return
+    refreshConfig()
+  }, [view, settingsCwd])
 
   const openSettings = (tab: ConfigTab) => {
     setSettingsTab(tab)
@@ -381,17 +393,24 @@ export function App(): React.ReactNode {
   }
 
   const writeModelConfig = (modelConfig: DesktopModelConfig) => {
-    if (!selected) return
+    if (!settingsCwd) return
     setConnectionTest(null)
-    setConfig(previous => previous ? { ...previous, modelConfig } : previous)
-    window.desktopApi.writeConfig(selected.cwd, modelConfig)
+    setConfig(previous => previous ? { ...previous, modelConfig } : {
+      cwd: settingsCwd,
+      skills: [],
+      mcpServers: [],
+      plugins: [],
+      memoryFiles: [],
+      modelConfig,
+    })
+    window.desktopApi.writeConfig(settingsCwd, modelConfig)
   }
 
   const testModelConfig = (modelConfig: DesktopModelConfig) => {
-    if (!selected) return
+    if (!settingsCwd) return
     setConnectionTesting(true)
     setConnectionTest(null)
-    window.desktopApi.testConfig(selected.cwd, modelConfig)
+    window.desktopApi.testConfig(settingsCwd, modelConfig)
   }
 
   const createMemory = (path: string) => {
@@ -539,7 +558,7 @@ export function App(): React.ReactNode {
           initialTab={settingsTab}
           model={selected?.model ?? 'default'}
           mode={selected?.mode ?? 'default'}
-          cwd={selected?.cwd ?? null}
+          cwd={settingsCwd}
           config={config}
           memoryFile={memoryFile}
           compactSummary={compactSummary}

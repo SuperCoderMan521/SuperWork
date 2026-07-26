@@ -60,4 +60,23 @@ describe('desktop styles', () => {
     expect(actionRule).toContain('flex: 0 0 auto')
     expect(buttonRule).toContain('white-space: nowrap')
   })
+
+  test('contains long permission summaries without widening the panel', () => {
+    const panelRule = css.match(/\.permission-panel\s*\{[^}]+\}/)?.[0] ?? ''
+    const contentRule = css.match(/\.permission-panel > div:first-child\s*\{[^}]+\}/)?.[0] ?? ''
+    const summaryRule = css.match(/\.permission-panel p\s*\{[^}]+\}/)?.[0] ?? ''
+
+    expect(panelRule).toContain('max-inline-size: calc(100vw - 332px)')
+    expect(contentRule).toContain('max-width: 100%')
+    expect(summaryRule).toContain('max-height:')
+    expect(summaryRule).toContain('overflow: auto')
+    expect(summaryRule).toContain('white-space: pre-wrap')
+    expect(summaryRule).toContain('word-break: break-all')
+  })
+
+  test('styles local artifact cards and right workspace preview', () => {
+    expect(css).toContain('.local-artifact-card')
+    expect(css).toContain('.local-artifacts-panel')
+    expect(css).toContain('.local-artifact-preview')
+  })
 })

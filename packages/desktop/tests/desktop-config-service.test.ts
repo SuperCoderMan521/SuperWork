@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -141,6 +141,55 @@ describe('DesktopConfigService.writeConfig', () => {
       expect(env.ANTHROPIC_AUTH_TOKEN).toBe('anthropic-token')
       expect(env.ANTHROPIC_MODEL).toBe('claude-test')
     } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('DesktopConfigService.snapshot plugin discovery', () => {
+  test('only lists directories that contain a Claude Code plugin manifest', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'superwork-plugin-config-'))
+    const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = join(cwd, 'home', '.claude')
+    try {
+      await mkdir(join(cwd, '.claudecode', 'plugins', 'real-plugin', '.claude-plugin'), { recursive: true })
+      await mkdir(join(cwd, '.claudecode', 'plugins', 'config-folder'), { recursive: true })
+      await mkdir(join(cwd, '.claudecode', 'skills', 'not-a-plugin'), { recursive: true })
+      await writeFile(
+        join(cwd, '.claudecode', 'plugins', 'real-plugin', '.claude-plugin', 'plugin.json'),
+        JSON.stringify({
+          name: 'real-plugin',
+          description: 'A real Claude Code plugin',
+          version: '1.0.0',
+        }),
+        'utf8',
+      )
+      await writeFile(
+        join(cwd, '.claudecode', 'plugins', 'settings.json'),
+        '{}',
+        'utf8',
+      )
+      await writeFile(
+        join(cwd, '.claudecode', 'plugins', 'config-folder', 'settings.json'),
+        '{}',
+        'utf8',
+      )
+
+      const service = new DesktopConfigService({
+        getAutoMemoryPath: () => join(cwd, 'missing-memory'),
+      })
+
+      const snapshot = await service.snapshot(cwd)
+
+      expect(snapshot.plugins.map(plugin => plugin.name)).toEqual(['real-plugin'])
+      expect(snapshot.plugins[0]?.description).toBe('A real Claude Code plugin')
+      expect(snapshot.plugins[0]?.path).toBe(join(cwd, '.claudecode', 'plugins', 'real-plugin'))
+    } finally {
+      if (previousClaudeConfigDir === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      }
       await rm(cwd, { recursive: true, force: true })
     }
   })

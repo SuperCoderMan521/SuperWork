@@ -160,6 +160,52 @@ async function listExistingDirectoryItems(
   return nested.flat()
 }
 
+function stringFromRecord(input: Record<string, unknown>, key: string): string | undefined {
+  const value = input[key]
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+async function readPluginManifest(
+  pluginRoot: string,
+): Promise<Record<string, unknown> | null> {
+  for (const manifestPath of [
+    join(pluginRoot, '.claude-plugin', 'plugin.json'),
+    join(pluginRoot, 'plugin.json'),
+  ]) {
+    try {
+      return JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+    } catch {
+      // Try the next supported manifest location.
+    }
+  }
+  return null
+}
+
+async function listPluginDirectoryItems(
+  directories: Array<{ path: string; description: string }>,
+): Promise<DesktopConfigItem[]> {
+  const plugins: DesktopConfigItem[] = []
+  for (const directory of directories) {
+    const items = await readdir(directory.path, { withFileTypes: true }).catch(() => [])
+    items.sort((left, right) => left.name.localeCompare(right.name))
+    for (const item of items) {
+      if (!item.isDirectory()) continue
+      const pluginRoot = join(directory.path, item.name)
+      const manifest = await readPluginManifest(pluginRoot)
+      if (!manifest) continue
+      const name = stringFromRecord(manifest, 'name') ?? item.name
+      plugins.push({
+        id: pluginRoot,
+        name,
+        description: stringFromRecord(manifest, 'description') ?? directory.description,
+        enabled: true,
+        path: pluginRoot,
+      })
+    }
+  }
+  return plugins
+}
+
 async function readJsonObject(path: string): Promise<Record<string, unknown>> {
   try {
     return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
@@ -383,9 +429,8 @@ export class DesktopConfigService {
         { path: join(claudeHome(), '..', '.codex', 'skills'), description: 'User Codex skill' },
       ]),
       discoverMcpServers(cwd),
-      listExistingDirectoryItems([
+      listPluginDirectoryItems([
         { path: join(cwd, '.claudecode', 'plugins'), description: 'Project plugin' },
-        { path: join(cwd, '.claudecode', 'skills'), description: 'Project skill' },
         { path: join(claudeHome(), 'plugins'), description: 'Claude Code plugin' },
         { path: join(claudeHome(), '..', '.codex', 'plugins'), description: 'Codex plugin' },
       ]),

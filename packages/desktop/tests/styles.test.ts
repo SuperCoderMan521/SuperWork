@@ -81,6 +81,10 @@ describe('desktop styles', () => {
     expect(css).toContain('.local-artifact-card')
     expect(css).toContain('.local-artifacts-panel')
     expect(css).toContain('.local-artifact-preview')
+    expect(css).toContain('.local-artifact-frame')
+    expect(css).toContain('min-height: 640px')
+    expect(css).toContain('.message-html-preview')
+    expect(css).toContain('min-height: 520px')
   })
 
   test('styles the local scheduled tasks center like other desktop centers', () => {

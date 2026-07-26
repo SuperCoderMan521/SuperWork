@@ -755,7 +755,8 @@ describe('desktop chat UI', () => {
     expect(html).toContain('Artifacts')
     expect(html).toContain('dashboard.html')
     expect(html).toContain('html-preview')
-    expect(html).toContain('sandbox=""')
+    expect(html).toContain('local-artifact-frame')
+    expect(html).toContain('sandbox="allow-scripts"')
     expect(html).not.toContain('<aside>files</aside>')
   })
 
@@ -1018,6 +1019,8 @@ describe('desktop chat UI', () => {
     expect(complete).toContain('mermaid-render-target')
     expect(complete).toContain('plantuml-render-target')
     expect(complete).toContain('HTML 预览')
+    expect(complete).toContain('message-html-preview')
+    expect(complete).toContain('sandbox="allow-scripts"')
     expect(complete).toContain('Markdown 预览')
 
     const incomplete = renderToStaticMarkup(

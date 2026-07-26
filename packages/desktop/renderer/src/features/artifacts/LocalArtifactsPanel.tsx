@@ -69,7 +69,12 @@ function ArtifactPreview({
   if (artifact.kind === 'html' || artifact.kind === 'svg') {
     return (
       <div className="local-artifact-preview local-artifact-html">
-        <iframe className="html-preview" title={artifact.title} sandbox="" srcDoc={content} />
+        <iframe
+          className="html-preview local-artifact-frame"
+          title={artifact.title}
+          sandbox="allow-scripts"
+          srcDoc={content}
+        />
       </div>
     )
   }

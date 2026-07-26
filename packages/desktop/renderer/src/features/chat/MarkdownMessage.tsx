@@ -164,11 +164,11 @@ function RichCodeBlock({
   language: string
   content: string
 }): React.ReactNode {
-  const [preview, setPreview] = useState(false)
   const normalized = language.toLowerCase()
   const isDiagram = normalized === 'mermaid' || normalized === 'plantuml'
   const isHtml = normalized === 'html'
   const isMarkdown = normalized === 'markdown' || normalized === 'md'
+  const [preview, setPreview] = useState(isHtml)
 
   return (
     <figure className={isDiagram ? 'code-block diagram-block' : 'code-block'}>
@@ -201,7 +201,12 @@ function RichCodeBlock({
       {isDiagram ? (
         <DiagramRenderer language={normalized as 'mermaid' | 'plantuml'} content={content} />
       ) : preview && isHtml ? (
-        <iframe className="html-preview" title="HTML 预览" sandbox="" srcDoc={content} />
+        <iframe
+          className="html-preview message-html-preview"
+          title="HTML 预览"
+          sandbox="allow-scripts"
+          srcDoc={content}
+        />
       ) : preview && isMarkdown ? (
         <MarkdownBlock content={content} className="markdown-preview markdown-rendered-html" />
       ) : (

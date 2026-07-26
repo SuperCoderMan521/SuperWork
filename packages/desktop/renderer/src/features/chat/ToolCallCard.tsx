@@ -17,6 +17,41 @@ function inputPath(input: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
+function inputRecord(input: unknown): Record<string, unknown> {
+  return input && typeof input === 'object'
+    ? (input as Record<string, unknown>)
+    : {}
+}
+
+function inputString(input: unknown, key: string): string | null {
+  const value = inputRecord(input)[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function agentToolSummary(tool: DesktopToolCall): string | null {
+  const normalized = tool.name.toLowerCase()
+  if (normalized === 'agent') {
+    return inputString(tool.input, 'name') ?? tool.summary ?? '启动子 Agent'
+  }
+  if (normalized === 'teamcreate' || normalized === 'teamdelete') {
+    return inputString(tool.input, 'team_name') ?? inputString(tool.input, 'teamName') ?? tool.summary ?? null
+  }
+  if (normalized === 'taskcreate') {
+    return inputString(tool.input, 'subject') ?? tool.summary ?? null
+  }
+  if (normalized === 'taskupdate') {
+    const taskId = inputString(tool.input, 'taskId')
+    const owner = inputString(tool.input, 'owner')
+    const status = inputString(tool.input, 'status')
+    return [taskId ? `#${taskId}` : null, owner ? `→ ${owner}` : null, status].filter(Boolean).join(' ') || tool.summary || null
+  }
+  if (normalized === 'sendmessage') {
+    const to = inputString(tool.input, 'to')
+    return to ? `→ ${to}` : tool.summary ?? null
+  }
+  return null
+}
+
 export function ToolCallCard({
   tool,
   onOpenFile,
@@ -48,7 +83,7 @@ export function ToolCallCard({
             {path}
           </button>
         ) : (
-          <span>{tool.summary || tool.name}</span>
+          <span>{(agentToolSummary(tool) ?? tool.summary) || tool.name}</span>
         )}
         {diff ? (
           <small className="diff-stat">

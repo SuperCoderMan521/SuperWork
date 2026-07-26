@@ -26,6 +26,7 @@ describe('createDesktopApi', () => {
       'compactMemory',
       'createSession',
       'deleteSession',
+      'getAgentMailbox',
       'getBuddy',
       'getConfig',
       'getDiagnostics',
@@ -79,7 +80,11 @@ describe('createDesktopApi', () => {
     const commands: DesktopCommand[] = []
     const api = createDesktopApi(command => commands.push(command), () => () => {}, () => 'request-1')
     api.getPerformance('G:/project', '30d', true)
-    expect(commands).toEqual([{ type: 'performance.get', requestId: 'request-1', cwd: 'G:/project', range: '30d', force: true }])
+    api.getAgentMailbox('G:/project')
+    expect(commands).toEqual([
+      { type: 'performance.get', requestId: 'request-1', cwd: 'G:/project', range: '30d', force: true },
+      { type: 'agent.mailbox.get', requestId: 'request-1', cwd: 'G:/project' },
+    ])
   })
 
   test('builds typed configuration commands', () => {

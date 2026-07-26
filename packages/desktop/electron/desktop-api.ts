@@ -34,6 +34,7 @@ export type DesktopApi = {
   compactMemory(path: string, content: string): void
   getBuddy(): void
   getPerformance(cwd: string, range: DesktopPerformanceRange, force?: boolean): void
+  getAgentMailbox(cwd?: string): void
   hatchBuddy(): void
   rehatchBuddy(): void
   petBuddy(): void
@@ -118,6 +119,7 @@ export function createDesktopApi(
       send({ type: 'memory.compact', requestId: request(), path, content }),
     getBuddy: () => send({ type: 'buddy.get', requestId: request() }),
     getPerformance: (cwd, range, force) => send({ type: 'performance.get', requestId: request(), cwd, range, force }),
+    getAgentMailbox: cwd => send({ type: 'agent.mailbox.get', requestId: request(), cwd }),
     hatchBuddy: () => send({ type: 'buddy.hatch', requestId: request() }),
     rehatchBuddy: () => send({ type: 'buddy.rehatch', requestId: request() }),
     petBuddy: () => send({ type: 'buddy.pet', requestId: request() }),

@@ -10,6 +10,7 @@ import { PermissionBroker } from './permission-broker.js'
 import { SessionService } from './session-service.js'
 import { DesktopBuddyService } from './buddy-service.js'
 import { DesktopPerformanceService } from './performance-service.js'
+import { DesktopAgentMailboxService } from './agent-mailbox-service.js'
 
 /**
  * Writes a leveled log line to stderr so it never pollutes the JSON Lines
@@ -98,6 +99,7 @@ async function main(): Promise<void> {
     cwd => storageModule.getProjectDir(cwd),
     cwd => configService.modelConfig(cwd),
   )
+  const agentMailbox = new DesktopAgentMailboxService()
   controller = new DesktopConversationController({
     runQuery: input => queryRunner.run(input),
     emit,
@@ -153,6 +155,7 @@ async function main(): Promise<void> {
     },
     buddy,
     getPerformance: (cwd, range, force) => performance.snapshot(cwd, range, force),
+    getAgentMailbox: () => agentMailbox.snapshot(),
   })
 
   logCore('info', 'startup services_ready, entering protocol pump')

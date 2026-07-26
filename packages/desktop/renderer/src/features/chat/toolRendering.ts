@@ -34,6 +34,14 @@ function splitLines(value: string): string[] {
 
 export function toolDisplayMeta(name: string): ToolDisplayMeta {
   const normalized = name.toLowerCase()
+  if (normalized === 'agent') return { icon: '🤖', label: 'Agent' }
+  if (normalized === 'teamcreate') return { icon: '👥', label: '创建团队' }
+  if (normalized === 'teamdelete') return { icon: '👥', label: '关闭团队' }
+  if (normalized === 'taskcreate') return { icon: '☑', label: '创建任务' }
+  if (normalized === 'taskupdate') return { icon: '↻', label: '更新任务' }
+  if (normalized === 'tasklist') return { icon: '☷', label: '任务列表' }
+  if (normalized === 'taskget') return { icon: '☑', label: '查看任务' }
+  if (normalized === 'sendmessage') return { icon: '✉', label: 'Agent 通信' }
   if (normalized.includes('read')) return { icon: '📖', label: '读取' }
   if (normalized.includes('edit')) return { icon: '✎', label: '编辑' }
   if (normalized.includes('write')) return { icon: '＋', label: '写入' }

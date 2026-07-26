@@ -65,6 +65,12 @@ describe('DesktopCommandSchema', () => {
       type: 'performance.get', requestId: 'perf-2', cwd: 'G:/project', range: 'year',
     }).success).toBe(false)
   })
+
+  test('accepts agent mailbox snapshot requests', () => {
+    expect(DesktopCommandSchema.safeParse({
+      type: 'agent.mailbox.get', requestId: 'mailbox-1', cwd: 'G:/project',
+    }).success).toBe(true)
+  })
 })
 
 describe('DesktopEventSchema', () => {
@@ -149,6 +155,29 @@ describe('DesktopEventSchema', () => {
         },
         trend: [], models: [], tools: [],
         diagnostics: { debugLogAvailable: false, langfuseConfigured: false }, warnings: [],
+      },
+    }).success).toBe(true)
+  })
+
+  test('accepts agent mailbox snapshots', () => {
+    expect(DesktopEventSchema.safeParse({
+      type: 'agent.mailbox.snapshot',
+      requestId: 'mailbox-1',
+      snapshot: {
+        generatedAt: 100,
+        teams: [{
+          name: 'alpha',
+          inboxes: [{
+            agentName: 'researcher',
+            messages: [{
+              from: 'team-lead',
+              text: 'hello',
+              timestamp: '2026-07-26T00:00:00.000Z',
+              read: false,
+              summary: 'hello',
+            }],
+          }],
+        }],
       },
     }).success).toBe(true)
   })

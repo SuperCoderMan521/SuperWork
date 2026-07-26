@@ -37,6 +37,8 @@ export type {
   DesktopTurnUsageReport,
   DesktopPerformanceRange,
   DesktopPerformanceSnapshot,
+  DesktopAgentMailboxMessage,
+  DesktopAgentMailboxSnapshot,
   PermissionDecision,
   PermissionMode,
 } from './types.js'

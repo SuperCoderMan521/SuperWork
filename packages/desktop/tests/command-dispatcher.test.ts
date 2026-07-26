@@ -13,6 +13,29 @@ describe('DesktopCommandDispatcher', () => {
     await dispatcher.dispatch({ type: 'performance.get', requestId: 'perf-1', cwd: 'G:/project', range: '30d', force: true })
     expect(events[0]).toMatchObject({ type: 'performance.snapshot', requestId: 'perf-1', snapshot: { cwd: 'G:/project', range: '30d', scannedSessions: 2 } })
   })
+
+  test('routes read-only agent mailbox snapshots', async () => {
+    const events: DesktopEvent[] = []
+    const dispatcher = new DesktopCommandDispatcher({
+      controller: { createSession: () => { throw new Error('unused') }, submitPrompt: async () => {}, interrupt: () => false, setModel: () => {}, setMode: () => {} },
+      listSessions: async () => [],
+      resolvePermission: () => false,
+      emit: event => events.push(event),
+      shutdown: async () => {},
+      getAgentMailbox: async () => ({
+        generatedAt: 1,
+        teams: [{ name: 'alpha', inboxes: [{ agentName: 'worker', messages: [] }] }],
+      }),
+    })
+
+    await dispatcher.dispatch({ type: 'agent.mailbox.get', requestId: 'mailbox-1', cwd: 'G:/project' })
+
+    expect(events[0]).toMatchObject({
+      type: 'agent.mailbox.snapshot',
+      requestId: 'mailbox-1',
+      snapshot: { teams: [{ name: 'alpha' }] },
+    })
+  })
   test('lists existing sessions', async () => {
     const events: DesktopEvent[] = []
     const dispatcher = new DesktopCommandDispatcher({

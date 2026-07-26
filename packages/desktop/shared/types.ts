@@ -20,6 +20,8 @@ import type {
   DesktopTurnUsageReportSchema,
   DesktopPerformanceRangeSchema,
   DesktopPerformanceSnapshotSchema,
+  DesktopAgentMailboxMessageSchema,
+  DesktopAgentMailboxSnapshotSchema,
   BuddySnapshotSchema,
   PermissionDecisionSchema,
   PermissionModeSchema,
@@ -51,6 +53,8 @@ export type DesktopModelPricing = z.infer<typeof DesktopModelPricingSchema>
 export type DesktopTurnUsageReport = z.infer<typeof DesktopTurnUsageReportSchema>
 export type DesktopPerformanceRange = z.infer<typeof DesktopPerformanceRangeSchema>
 export type DesktopPerformanceSnapshot = z.infer<typeof DesktopPerformanceSnapshotSchema>
+export type DesktopAgentMailboxMessage = z.infer<typeof DesktopAgentMailboxMessageSchema>
+export type DesktopAgentMailboxSnapshot = z.infer<typeof DesktopAgentMailboxSnapshotSchema>
 export type BuddySnapshot = z.infer<typeof BuddySnapshotSchema>
 export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>
 export type PermissionMode = z.infer<typeof PermissionModeSchema>

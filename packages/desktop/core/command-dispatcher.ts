@@ -6,6 +6,7 @@ import type {
   DesktopModelConfig,
   DesktopPerformanceRange,
   DesktopPerformanceSnapshot,
+  DesktopAgentMailboxSnapshot,
   DesktopSession,
   DesktopSessionSummary,
   PermissionDecision,
@@ -40,6 +41,7 @@ type CommandDispatcherOptions = {
   shutdown: () => Promise<void>
   buddy?: DesktopBuddyService
   getPerformance?: (cwd: string, range: DesktopPerformanceRange, force?: boolean) => Promise<DesktopPerformanceSnapshot>
+  getAgentMailbox?: (cwd?: string) => Promise<DesktopAgentMailboxSnapshot>
 }
 
 function unsupported(command: DesktopCommand['type']): never {
@@ -216,6 +218,13 @@ export class DesktopCommandDispatcher {
           type: 'performance.snapshot',
           requestId: command.requestId,
           snapshot: await (this.options.getPerformance?.(command.cwd, command.range, command.force) ?? unsupported(command.type)),
+        })
+        return
+      case 'agent.mailbox.get':
+        this.options.emit({
+          type: 'agent.mailbox.snapshot',
+          requestId: command.requestId,
+          snapshot: await (this.options.getAgentMailbox?.(command.cwd) ?? unsupported(command.type)),
         })
         return
     }

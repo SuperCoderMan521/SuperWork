@@ -201,6 +201,26 @@ export const DesktopFileEntrySchema = z.object({
   label: z.string().min(1),
 })
 
+export const DesktopAgentMailboxMessageSchema = z.object({
+  from: z.string().min(1),
+  text: z.string(),
+  timestamp: z.string().min(1),
+  read: z.boolean(),
+  color: z.string().optional(),
+  summary: z.string().optional(),
+})
+
+export const DesktopAgentMailboxSnapshotSchema = z.object({
+  generatedAt: z.number().int().nonnegative(),
+  teams: z.array(z.object({
+    name: z.string().min(1),
+    inboxes: z.array(z.object({
+      agentName: z.string().min(1),
+      messages: z.array(DesktopAgentMailboxMessageSchema),
+    })),
+  })),
+})
+
 export const BuddySnapshotSchema = z.object({
   enabled: z.boolean(),
   muted: z.boolean(),
@@ -280,6 +300,7 @@ export const DesktopCommandSchema = z.discriminatedUnion('type', [
   RequestSchema.extend({ type: z.literal('buddy.pet'), sessionId: IdSchema.optional() }),
   RequestSchema.extend({ type: z.literal('buddy.setMuted'), muted: z.boolean() }),
   RequestSchema.extend({ type: z.literal('performance.get'), cwd: z.string().min(1), range: DesktopPerformanceRangeSchema, force: z.boolean().optional() }),
+  RequestSchema.extend({ type: z.literal('agent.mailbox.get'), cwd: z.string().min(1).optional() }),
 ])
 
 export const DesktopEventSchema = z.discriminatedUnion('type', [
@@ -370,4 +391,5 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
   RequestSchema.extend({ type: z.literal('buddy.snapshot'), state: BuddySnapshotSchema }),
   RequestSchema.extend({ type: z.literal('buddy.reaction'), reaction: z.string(), petAt: z.number().int().nonnegative().optional() }),
   RequestSchema.extend({ type: z.literal('performance.snapshot'), snapshot: DesktopPerformanceSnapshotSchema }),
+  RequestSchema.extend({ type: z.literal('agent.mailbox.snapshot'), snapshot: DesktopAgentMailboxSnapshotSchema }),
 ])

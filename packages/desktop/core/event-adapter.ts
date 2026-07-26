@@ -40,6 +40,41 @@ function contentBlocks(event: UnknownRecord): UnknownRecord[] {
   return message.content.filter(isRecord)
 }
 
+type IndexedContentBlock = {
+  block: UnknownRecord
+  index: number
+}
+
+function thinkingContent(block: UnknownRecord): string | undefined {
+  const type = stringProperty(block, 'type')
+  if (type === 'thinking') return stringProperty(block, 'thinking')
+  if (type === 'redacted_thinking') return '姝ゆ€濊€冨唴瀹瑰凡闅愯棌'
+  return undefined
+}
+
+function mergeAdjacentThinkingBlocks(blocks: UnknownRecord[]): IndexedContentBlock[] {
+  const merged: IndexedContentBlock[] = []
+  blocks.forEach((block, index) => {
+    const blockType = stringProperty(block, 'type')
+    const isThinking = blockType === 'thinking' || blockType === 'redacted_thinking'
+    const previous = merged[merged.length - 1]
+    const previousType = previous ? stringProperty(previous.block, 'type') : undefined
+    if (isThinking && previous && previousType === blockType) {
+      const previousContent = thinkingContent(previous.block)
+      const nextContent = thinkingContent(block)
+      if (blockType === 'thinking' && previousContent && nextContent) {
+        previous.block = {
+          ...previous.block,
+          thinking: `${previousContent}\n\n${nextContent}`,
+        }
+      }
+      return
+    }
+    merged.push({ block, index })
+  })
+  return merged
+}
+
 function toolSummary(input: unknown): string {
   if (!isRecord(input)) return ''
   for (const key of ['file_path', 'path', 'command', 'query']) {
@@ -55,6 +90,9 @@ export class DesktopEventAdapter {
   private readonly tools = new Map<string, DesktopToolCall>()
   private hasStreamingText = false
   private readonly streamingTextBlockIds = new Map<number, string>()
+  private readonly streamingTextDisplayOrders = new Map<number, number>()
+  private streamingBlockDisplayBase: number | undefined
+  private readonly emittedAssistantTextSignatures = new Set<string>()
   private hasAssistantOutput = false
   private currentUsage: DesktopTokenUsage = { ...EMPTY_DESKTOP_USAGE }
   private totalUsage: DesktopTokenUsage = { ...EMPTY_DESKTOP_USAGE }
@@ -110,23 +148,24 @@ export class DesktopEventAdapter {
       this.hasStreamingText = true
       this.hasAssistantOutput = true
       this.anchorMessageId = textDelta.messageId
-      return [
-        this.sessionEvent({
-          type: 'message.delta',
-          messageId: textDelta.messageId,
-          delta: textDelta.delta,
-        }),
-      ]
+      return [this.sessionEvent({
+        type: 'message.delta',
+        messageId: textDelta.messageId,
+        delta: textDelta.delta,
+        ...(textDelta.displayOrder !== undefined ? { displayOrder: textDelta.displayOrder } : {}),
+      })]
     }
 
     if (value.type === 'user') return this.toolResults(value)
     if (value.type !== 'assistant') return []
 
-    const blocks = contentBlocks(value)
-    const messageBlockCount = blocks.filter(block =>
+    const rawBlocks = contentBlocks(value)
+    const blocks = mergeAdjacentThinkingBlocks(rawBlocks)
+    const messageBlockCount = blocks.filter(({ block }) =>
       block.type === 'text' || block.type === 'thinking' || block.type === 'redacted_thinking',
     ).length
-    const events = blocks.flatMap((block, index) => {
+    const baseDisplayOrder = this.displayOrderBaseForCompletedBlocks(rawBlocks.length)
+    const events = blocks.flatMap(({ block, index }) => {
       const blockType = stringProperty(block, 'type')
       if (blockType === 'tool_use' || blockType === 'server_tool_use') {
         const id = stringProperty(block, 'id')
@@ -140,7 +179,7 @@ export class DesktopEventAdapter {
           summary: toolSummary(input),
           input,
           startedAt: this.now(),
-          displayOrder: this.nextDisplayOrder(),
+          displayOrder: this.displayOrderForBlock(index, baseDisplayOrder),
         }
         this.tools.set(id, tool)
         return [this.sessionEvent({ type: 'tool.updated', tool })]
@@ -159,6 +198,13 @@ export class DesktopEventAdapter {
         : blockType === 'redacted_thinking'
           ? 'redacted_thinking' as const
           : 'text' as const
+      if (kind === 'text') {
+        const signature = content.trim()
+        if (signature && this.emittedAssistantTextSignatures.has(signature)) {
+          return []
+        }
+        if (signature) this.emittedAssistantTextSignatures.add(signature)
+      }
       const streamingTextId = blockType === 'text' ? this.streamingTextIdForCompletedBlock(index) : undefined
       const streamingText = blockType === 'text' && (streamingTextId !== undefined || this.hasStreamingText)
       const baseId = stringProperty(value, 'uuid')
@@ -174,7 +220,8 @@ export class DesktopEventAdapter {
           kind,
           content,
           createdAt: this.now(),
-          displayOrder: this.nextDisplayOrder(),
+          displayOrder: this.displayOrderForBlock(index, baseDisplayOrder),
+          ...(streamingText ? { displayOrderProvisional: false } : {}),
         },
       })]
     })
@@ -183,6 +230,9 @@ export class DesktopEventAdapter {
       const lastMessage = [...events].reverse().find(event => event.type === 'message.added')
       if (lastMessage?.type === 'message.added') this.anchorMessageId = lastMessage.message.id
     }
+    this.streamingTextBlockIds.clear()
+    this.streamingTextDisplayOrders.clear()
+    this.streamingBlockDisplayBase = undefined
     return events
   }
 
@@ -230,7 +280,7 @@ export class DesktopEventAdapter {
     this.currentUsage = { ...EMPTY_DESKTOP_USAGE }
   }
 
-  private textDelta(value: UnknownRecord): { messageId: string; delta: string } | undefined {
+  private textDelta(value: UnknownRecord): { messageId: string; delta: string; displayOrder?: number } | undefined {
     if (value.type !== 'stream_event' || !isRecord(value.event)) return undefined
     const event = value.event
     if (event.type !== 'content_block_delta' || !isRecord(event.delta)) {
@@ -242,7 +292,19 @@ export class DesktopEventAdapter {
     return {
       messageId: this.streamingTextIdForDelta(event),
       delta,
+      ...this.displayOrderForDelta(event),
     }
+  }
+
+  private displayOrderForDelta(event: UnknownRecord): { displayOrder: number } | Record<string, never> {
+    const index = event.index
+    if (typeof index !== 'number' || index < 0) return {}
+    const existing = this.streamingTextDisplayOrders.get(index)
+    if (existing !== undefined) return { displayOrder: existing }
+    this.streamingBlockDisplayBase ??= this.sequence + 1
+    const displayOrder = this.streamingBlockDisplayBase + index
+    this.streamingTextDisplayOrders.set(index, displayOrder)
+    return { displayOrder }
   }
 
   private streamingTextIdForDelta(event: UnknownRecord): string {
@@ -259,8 +321,26 @@ export class DesktopEventAdapter {
     const messageId = this.streamingTextBlockIds.get(index)
     if (messageId) {
       this.streamingTextBlockIds.delete(index)
+      this.streamingTextDisplayOrders.delete(index)
+      if (this.streamingTextDisplayOrders.size === 0) {
+        this.streamingBlockDisplayBase = undefined
+      }
     }
     return messageId
+  }
+
+  private displayOrderBaseForCompletedBlocks(blockCount: number): number {
+    if (this.streamingBlockDisplayBase !== undefined) {
+      return this.streamingBlockDisplayBase
+    }
+    const indexedOrders = [...this.streamingTextDisplayOrders.entries()]
+      .filter(([index]) => index >= 0 && index < blockCount)
+      .map(([index, displayOrder]) => displayOrder - index)
+    return indexedOrders.length ? Math.min(...indexedOrders) : this.sequence + 1
+  }
+
+  private displayOrderForBlock(index: number, base: number): number {
+    return base + index
   }
 
   private toolResults(value: UnknownRecord): SessionEvent[] {

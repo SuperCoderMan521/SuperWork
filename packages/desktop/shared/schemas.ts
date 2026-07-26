@@ -45,6 +45,7 @@ export const DesktopMessageSchema = z.object({
   content: z.string(),
   createdAt: z.number().int().nonnegative(),
   displayOrder: z.number().int().nonnegative().optional(),
+  displayOrderProvisional: z.boolean().optional(),
 })
 
 export const DesktopTokenUsageSchema = z.object({
@@ -221,6 +222,28 @@ export const DesktopAgentMailboxSnapshotSchema = z.object({
   })),
 })
 
+export const DesktopScheduledTaskSchema = z.object({
+  id: IdSchema,
+  cron: z.string().min(1),
+  prompt: z.string(),
+  createdAt: z.string().min(1),
+  lastFiredAt: z.string().min(1).optional(),
+  recurring: z.boolean().optional(),
+  permanent: z.boolean().optional(),
+  agentId: z.string().min(1).optional(),
+  source: z.enum(['file', 'session']),
+  durable: z.boolean(),
+})
+
+export const DesktopScheduledTasksSnapshotSchema = z.object({
+  cwd: z.string().min(1),
+  path: z.string().min(1),
+  generatedAt: z.number().int().nonnegative(),
+  tasks: z.array(DesktopScheduledTaskSchema),
+  warnings: z.array(z.string()),
+  error: z.string().optional(),
+})
+
 export const BuddySnapshotSchema = z.object({
   enabled: z.boolean(),
   muted: z.boolean(),
@@ -301,6 +324,8 @@ export const DesktopCommandSchema = z.discriminatedUnion('type', [
   RequestSchema.extend({ type: z.literal('buddy.setMuted'), muted: z.boolean() }),
   RequestSchema.extend({ type: z.literal('performance.get'), cwd: z.string().min(1), range: DesktopPerformanceRangeSchema, force: z.boolean().optional() }),
   RequestSchema.extend({ type: z.literal('agent.mailbox.get'), cwd: z.string().min(1).optional() }),
+  RequestSchema.extend({ type: z.literal('scheduledTasks.get'), cwd: z.string().min(1) }),
+  RequestSchema.extend({ type: z.literal('scheduledTasks.persist'), cwd: z.string().min(1), id: IdSchema }),
 ])
 
 export const DesktopEventSchema = z.discriminatedUnion('type', [
@@ -325,6 +350,7 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
     type: z.literal('message.delta'),
     messageId: IdSchema,
     delta: z.string(),
+    displayOrder: z.number().int().nonnegative().optional(),
   }),
   SequencedSessionEventSchema.extend({
     type: z.literal('tool.updated'),
@@ -392,4 +418,5 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
   RequestSchema.extend({ type: z.literal('buddy.reaction'), reaction: z.string(), petAt: z.number().int().nonnegative().optional() }),
   RequestSchema.extend({ type: z.literal('performance.snapshot'), snapshot: DesktopPerformanceSnapshotSchema }),
   RequestSchema.extend({ type: z.literal('agent.mailbox.snapshot'), snapshot: DesktopAgentMailboxSnapshotSchema }),
+  RequestSchema.extend({ type: z.literal('scheduledTasks.snapshot'), snapshot: DesktopScheduledTasksSnapshotSchema }),
 ])

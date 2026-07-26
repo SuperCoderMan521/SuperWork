@@ -71,6 +71,18 @@ describe('DesktopCommandSchema', () => {
       type: 'agent.mailbox.get', requestId: 'mailbox-1', cwd: 'G:/project',
     }).success).toBe(true)
   })
+
+  test('accepts local scheduled task snapshot requests', () => {
+    expect(DesktopCommandSchema.safeParse({
+      type: 'scheduledTasks.get', requestId: 'cron-1', cwd: 'G:/project',
+    }).success).toBe(true)
+  })
+
+  test('accepts local scheduled task persist requests', () => {
+    expect(DesktopCommandSchema.safeParse({
+      type: 'scheduledTasks.persist', requestId: 'cron-persist-1', cwd: 'G:/project', id: '578a7453',
+    }).success).toBe(true)
+  })
 })
 
 describe('DesktopEventSchema', () => {
@@ -178,6 +190,30 @@ describe('DesktopEventSchema', () => {
             }],
           }],
         }],
+      },
+    }).success).toBe(true)
+  })
+
+  test('accepts local scheduled task snapshots', () => {
+    expect(DesktopEventSchema.safeParse({
+      type: 'scheduledTasks.snapshot',
+      requestId: 'cron-1',
+      snapshot: {
+        cwd: 'G:/project',
+        path: 'G:/project/.claude/scheduled_tasks.json',
+        generatedAt: 100,
+        tasks: [{
+          id: 'abc123ef',
+          cron: '0 9 * * 1',
+          prompt: 'Run weekly standup',
+          recurring: true,
+          source: 'file',
+          durable: true,
+          createdAt: '2026-07-26T00:00:00.000Z',
+          lastFiredAt: '2026-07-26T09:00:00.000Z',
+          agentId: 'researcher',
+        }],
+        warnings: [],
       },
     }).success).toBe(true)
   })

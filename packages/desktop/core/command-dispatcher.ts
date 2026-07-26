@@ -6,6 +6,7 @@ import type {
   DesktopModelConfig,
   DesktopPerformanceRange,
   DesktopPerformanceSnapshot,
+  DesktopScheduledTasksSnapshot,
   DesktopAgentMailboxSnapshot,
   DesktopSession,
   DesktopSessionSummary,
@@ -42,6 +43,8 @@ type CommandDispatcherOptions = {
   buddy?: DesktopBuddyService
   getPerformance?: (cwd: string, range: DesktopPerformanceRange, force?: boolean) => Promise<DesktopPerformanceSnapshot>
   getAgentMailbox?: (cwd?: string) => Promise<DesktopAgentMailboxSnapshot>
+  getScheduledTasks?: (cwd: string) => Promise<DesktopScheduledTasksSnapshot>
+  persistScheduledTask?: (cwd: string, id: string) => Promise<DesktopScheduledTasksSnapshot>
 }
 
 function unsupported(command: DesktopCommand['type']): never {
@@ -225,6 +228,20 @@ export class DesktopCommandDispatcher {
           type: 'agent.mailbox.snapshot',
           requestId: command.requestId,
           snapshot: await (this.options.getAgentMailbox?.(command.cwd) ?? unsupported(command.type)),
+        })
+        return
+      case 'scheduledTasks.get':
+        this.options.emit({
+          type: 'scheduledTasks.snapshot',
+          requestId: command.requestId,
+          snapshot: await (this.options.getScheduledTasks?.(command.cwd) ?? unsupported(command.type)),
+        })
+        return
+      case 'scheduledTasks.persist':
+        this.options.emit({
+          type: 'scheduledTasks.snapshot',
+          requestId: command.requestId,
+          snapshot: await (this.options.persistScheduledTask?.(command.cwd, command.id) ?? unsupported(command.type)),
         })
         return
     }

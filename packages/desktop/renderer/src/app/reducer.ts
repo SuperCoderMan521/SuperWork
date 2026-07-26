@@ -77,15 +77,21 @@ function nextDisplayOrder(session: RendererSession): number {
 }
 
 function normalizeSession(session: DesktopSession): RendererSession {
-  const messages = session.messages.map((message, index) => ({
-    ...message,
-    displayOrder: message.displayOrder ?? index + 1,
-  }))
+  const messagesById: Record<string, DesktopMessage> = {}
+  const messageOrder: string[] = []
+  session.messages.forEach((message, index) => {
+    const current = messagesById[message.id]
+    messagesById[message.id] = {
+      ...message,
+      displayOrder: current?.displayOrder ?? message.displayOrder ?? index + 1,
+    }
+    if (!current) messageOrder.push(message.id)
+  })
   return {
     ...session,
     turnUsageReports: session.turnUsageReports ?? [],
-    messages: Object.fromEntries(messages.map(message => [message.id, message])),
-    messageOrder: messages.map(message => message.id),
+    messages: messagesById,
+    messageOrder,
     tools: Object.fromEntries(session.tools.map(tool => [tool.id, tool])),
     toolOrder: session.tools.map(tool => tool.id),
     permissions: {},
@@ -95,6 +101,16 @@ function normalizeSession(session: DesktopSession): RendererSession {
 }
 
 type SessionEvent = Extract<DesktopEvent, { sessionId: string; sequence: number }>
+
+function isThinkingMessage(message: DesktopMessage): boolean {
+  return message.kind === 'thinking' || message.kind === 'redacted_thinking'
+}
+
+function mergedThinkingContent(previous: string, next: string): string {
+  if (!previous.trim()) return next
+  if (!next.trim()) return previous
+  return `${previous}\n\n${next}`
+}
 
 function updateSession(
   state: DesktopRendererState,
@@ -123,10 +139,42 @@ function updateSession(
     case 'message.added': {
       const exists = event.message.id in session.messages
       const current = session.messages[event.message.id]
+      if (!exists && isThinkingMessage(event.message)) {
+        const previousMessageId = session.messageOrder[session.messageOrder.length - 1]
+        const previousMessage = previousMessageId ? session.messages[previousMessageId] : undefined
+        if (
+          previousMessageId &&
+          previousMessage &&
+          isThinkingMessage(previousMessage) &&
+          previousMessage.kind === event.message.kind &&
+          previousMessage.role === event.message.role
+        ) {
+          session = {
+            ...session,
+            messages: {
+              ...session.messages,
+              [previousMessageId]: {
+                ...previousMessage,
+                content: mergedThinkingContent(previousMessage.content, event.message.content),
+              },
+            },
+          }
+          break
+        }
+      }
+      const shouldReplaceProvisionalDisplayOrder =
+        current?.displayOrderProvisional === true &&
+        event.message.displayOrderProvisional === false &&
+        event.message.displayOrder !== undefined
       const message = current
         ? {
             ...event.message,
-            displayOrder: current.displayOrder ?? event.message.displayOrder,
+            displayOrder: shouldReplaceProvisionalDisplayOrder
+              ? event.message.displayOrder
+              : current.displayOrder ?? event.message.displayOrder,
+            displayOrderProvisional: shouldReplaceProvisionalDisplayOrder
+              ? false
+              : current.displayOrderProvisional,
           }
         : event.message
       session = {
@@ -144,7 +192,8 @@ function updateSession(
         role: 'assistant' as const,
         content: '',
         createdAt: Date.now(),
-        displayOrder: event.sequence,
+        displayOrder: event.displayOrder ?? event.sequence,
+        displayOrderProvisional: event.displayOrder === undefined,
       }
       const exists = event.messageId in session.messages
       session = {

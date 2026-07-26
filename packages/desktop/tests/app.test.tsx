@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   App,
+  defaultWorkspaceFromSources,
   defaultWorkspaceForNewSession,
+  initialSessionIdForWorkspace,
   settingsCwdForConfig,
   sessionIdFromPendingWorkspaceSnapshot,
   selectSidebarSessions,
@@ -46,6 +48,25 @@ describe('defaultWorkspaceForNewSession', () => {
   test('uses the current session cwd before falling back to project cwd', () => {
     expect(defaultWorkspaceForNewSession('G:/project', 'G:/fallback')).toBe('G:/project')
     expect(defaultWorkspaceForNewSession(null, 'G:/fallback')).toBe('G:/fallback')
+  })
+})
+
+describe('defaultWorkspaceFromSources', () => {
+  test('uses the stored workspace before recent history when no session is selected', () => {
+    expect(defaultWorkspaceFromSources(null, 'G:/stored-project', 'G:/old-project')).toBe('G:/stored-project')
+  })
+})
+
+describe('initialSessionIdForWorkspace', () => {
+  test('keeps an empty stored workspace selected instead of jumping to recent history', () => {
+    expect(
+      initialSessionIdForWorkspace(
+        [
+          { id: 'history-1', title: 'History', cwd: 'G:/old-project', updatedAt: 20 },
+        ],
+        'G:/new-project',
+      ),
+    ).toBeNull()
   })
 })
 

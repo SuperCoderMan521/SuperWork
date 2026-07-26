@@ -79,4 +79,10 @@ describe('desktop styles', () => {
     expect(css).toContain('.local-artifacts-panel')
     expect(css).toContain('.local-artifact-preview')
   })
+
+  test('styles the local scheduled tasks center like other desktop centers', () => {
+    expect(css).toContain('.scheduled-tasks-shell')
+    expect(css).toContain('.scheduled-task-card')
+    expect(css).toContain('.scheduled-task-empty')
+  })
 })

@@ -35,6 +35,8 @@ export type DesktopApi = {
   getBuddy(): void
   getPerformance(cwd: string, range: DesktopPerformanceRange, force?: boolean): void
   getAgentMailbox(cwd?: string): void
+  getScheduledTasks(cwd: string): void
+  persistScheduledTask(cwd: string, id: string): void
   hatchBuddy(): void
   rehatchBuddy(): void
   petBuddy(): void
@@ -120,6 +122,8 @@ export function createDesktopApi(
     getBuddy: () => send({ type: 'buddy.get', requestId: request() }),
     getPerformance: (cwd, range, force) => send({ type: 'performance.get', requestId: request(), cwd, range, force }),
     getAgentMailbox: cwd => send({ type: 'agent.mailbox.get', requestId: request(), cwd }),
+    getScheduledTasks: cwd => send({ type: 'scheduledTasks.get', requestId: request(), cwd }),
+    persistScheduledTask: (cwd, id) => send({ type: 'scheduledTasks.persist', requestId: request(), cwd, id }),
     hatchBuddy: () => send({ type: 'buddy.hatch', requestId: request() }),
     rehatchBuddy: () => send({ type: 'buddy.rehatch', requestId: request() }),
     petBuddy: () => send({ type: 'buddy.pet', requestId: request() }),

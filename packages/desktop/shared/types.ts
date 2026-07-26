@@ -22,6 +22,8 @@ import type {
   DesktopPerformanceSnapshotSchema,
   DesktopAgentMailboxMessageSchema,
   DesktopAgentMailboxSnapshotSchema,
+  DesktopScheduledTaskSchema,
+  DesktopScheduledTasksSnapshotSchema,
   BuddySnapshotSchema,
   PermissionDecisionSchema,
   PermissionModeSchema,
@@ -55,6 +57,8 @@ export type DesktopPerformanceRange = z.infer<typeof DesktopPerformanceRangeSche
 export type DesktopPerformanceSnapshot = z.infer<typeof DesktopPerformanceSnapshotSchema>
 export type DesktopAgentMailboxMessage = z.infer<typeof DesktopAgentMailboxMessageSchema>
 export type DesktopAgentMailboxSnapshot = z.infer<typeof DesktopAgentMailboxSnapshotSchema>
+export type DesktopScheduledTask = z.infer<typeof DesktopScheduledTaskSchema>
+export type DesktopScheduledTasksSnapshot = z.infer<typeof DesktopScheduledTasksSnapshotSchema>
 export type BuddySnapshot = z.infer<typeof BuddySnapshotSchema>
 export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>
 export type PermissionMode = z.infer<typeof PermissionModeSchema>

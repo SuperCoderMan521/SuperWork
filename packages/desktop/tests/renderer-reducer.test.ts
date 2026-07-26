@@ -67,6 +67,109 @@ describe('desktopReducer', () => {
     ).toBe(1)
   })
 
+  test('uses reserved display order from streaming deltas before finalizing text', () => {
+    const state = createDesktopState()
+    const streamed = desktopReducer(state, {
+      type: 'message.delta',
+      sessionId: 'session-1',
+      sequence: 1,
+      messageId: 'streaming-assistant-1',
+      delta: 'answer',
+      displayOrder: 2,
+    })
+    const thinking = desktopReducer(streamed, {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 2,
+      message: {
+        id: 'message-1-0',
+        role: 'assistant',
+        kind: 'thinking',
+        content: 'reasoning',
+        createdAt: 2,
+        displayOrder: 1,
+      },
+    })
+    const finalized = desktopReducer(thinking, {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 3,
+      message: {
+        id: 'streaming-assistant-1',
+        role: 'assistant',
+        kind: 'text',
+        content: 'answer',
+        createdAt: 3,
+        displayOrder: 2,
+      },
+    })
+
+    const session = finalized.sessions['session-1']!
+    expect(session.messages['message-1-0']?.displayOrder).toBe(1)
+    expect(session.messages['streaming-assistant-1']?.displayOrder).toBe(2)
+  })
+
+  test('lets final assistant block order move a provisional streamed answer after thinking', () => {
+    const state = createDesktopState()
+    const streamed = desktopReducer(state, {
+      type: 'message.delta',
+      sessionId: 'session-1',
+      sequence: 1,
+      messageId: 'streaming-assistant',
+      delta: 'answer',
+    })
+    const finalized = desktopReducer(streamed, {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 2,
+      message: {
+        id: 'streaming-assistant',
+        role: 'assistant',
+        kind: 'text',
+        content: 'answer',
+        createdAt: 2,
+        displayOrder: 3,
+        displayOrderProvisional: false,
+      },
+    })
+
+    expect(finalized.sessions['session-1']?.messages['streaming-assistant']?.displayOrder).toBe(3)
+  })
+
+  test('merges consecutive thinking messages instead of appending many collapsed cards', () => {
+    const first = desktopReducer(createDesktopState(), {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 1,
+      message: {
+        id: 'thinking-1',
+        role: 'assistant',
+        kind: 'thinking',
+        content: 'First thought.',
+        createdAt: 1,
+        displayOrder: 1,
+      },
+    })
+    const second = desktopReducer(first, {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 2,
+      message: {
+        id: 'thinking-2',
+        role: 'assistant',
+        kind: 'thinking',
+        content: 'Second thought.',
+        createdAt: 2,
+        displayOrder: 2,
+      },
+    })
+
+    const session = second.sessions['session-1']!
+    expect(session.messageOrder).toEqual(['thinking-1'])
+    expect(session.messages['thinking-1']?.content).toBe('First thought.\n\nSecond thought.')
+    expect(session.messages['thinking-2']).toBeUndefined()
+  })
+
   test('marks a session for resync when sequence has a gap', () => {
     const state = createDesktopState()
     const next = desktopReducer(state, {
@@ -101,6 +204,42 @@ describe('desktopReducer', () => {
 
     expect(next.sessions['session-1']?.needsSnapshot).toBe(false)
     expect(next.sessions['session-1']?.model).toBe('sonnet')
+  })
+
+  test('deduplicates messages with the same id when restoring a snapshot', () => {
+    const next = desktopReducer(createDesktopState(), {
+      type: 'session.snapshot',
+      sessionId: 'session-1',
+      sequence: 4,
+      session: {
+        id: 'session-1',
+        title: 'Conversation',
+        cwd: 'G:/project',
+        updatedAt: 100,
+        model: 'sonnet',
+        mode: 'default',
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: 'partial answer',
+            createdAt: 100,
+          },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: 'final answer',
+            createdAt: 200,
+          },
+        ],
+        tools: [],
+        generationState: 'idle',
+        sequence: 4,
+      },
+    })
+
+    expect(next.sessions['session-1']?.messageOrder).toEqual(['assistant-1'])
+    expect(next.sessions['session-1']?.messages['assistant-1']?.content).toBe('final answer')
   })
 
   test('backfills display order for restored messages without moving new streamed output before history', () => {

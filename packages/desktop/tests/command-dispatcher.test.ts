@@ -36,6 +36,48 @@ describe('DesktopCommandDispatcher', () => {
       snapshot: { teams: [{ name: 'alpha' }] },
     })
   })
+
+  test('routes local scheduled task persistence and emits the refreshed snapshot', async () => {
+    const events: DesktopEvent[] = []
+    const dispatcher = new DesktopCommandDispatcher({
+      controller: { createSession: () => { throw new Error('unused') }, submitPrompt: async () => {}, interrupt: () => false, setModel: () => {}, setMode: () => {} },
+      listSessions: async () => [],
+      resolvePermission: () => false,
+      emit: event => events.push(event),
+      shutdown: async () => {},
+      persistScheduledTask: async (cwd, id) => ({
+        cwd,
+        path: `${cwd}/.claude/scheduled_tasks.json`,
+        generatedAt: 1,
+        warnings: [],
+        tasks: [{
+          id,
+          cron: '0 5 * * *',
+          prompt: '查询当日天气',
+          createdAt: '2026-07-26T00:00:00.000Z',
+          recurring: true,
+          source: 'file',
+          durable: true,
+        }],
+      }),
+    })
+
+    await dispatcher.dispatch({
+      type: 'scheduledTasks.persist',
+      requestId: 'persist-1',
+      cwd: 'G:/project',
+      id: '578a7453',
+    })
+
+    expect(events[0]).toMatchObject({
+      type: 'scheduledTasks.snapshot',
+      requestId: 'persist-1',
+      snapshot: {
+        cwd: 'G:/project',
+        tasks: [{ id: '578a7453', durable: true, source: 'file' }],
+      },
+    })
+  })
   test('lists existing sessions', async () => {
     const events: DesktopEvent[] = []
     const dispatcher = new DesktopCommandDispatcher({

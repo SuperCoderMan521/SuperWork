@@ -37,6 +37,40 @@ describe('DesktopConversationController', () => {
     expect(controller.getSession(session.id)?.generationState).toBe('idle')
   })
 
+  test('keeps only one stored assistant message when streaming finalizes a placeholder', async () => {
+    async function* streamingThenFinalQuery(): AsyncGenerator<unknown> {
+      yield {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'Hel' },
+        },
+      }
+      yield {
+        type: 'assistant',
+        uuid: 'assistant-1',
+        message: { content: [{ type: 'text', text: 'Hello' }] },
+      }
+    }
+    const controller = new DesktopConversationController({
+      runQuery: () => streamingThenFinalQuery(),
+      emit: () => {},
+      createId: () => 'session-1',
+      now: () => 100,
+      defaultModel: 'sonnet',
+      defaultMode: 'default',
+    })
+
+    const session = controller.createSession('G:/project')
+    await controller.submitPrompt(session.id, 'Hi')
+
+    const assistantMessages = controller
+      .getSession(session.id)
+      ?.messages.filter(message => message.role === 'assistant')
+    expect(assistantMessages?.map(message => message.id)).toEqual(['streaming-assistant'])
+    expect(assistantMessages?.[0]?.content).toBe('Hello')
+  })
+
   test('rejects a second prompt while generation is active', async () => {
     let release: (() => void) | undefined
     async function* blockedQuery(): AsyncGenerator<unknown> {

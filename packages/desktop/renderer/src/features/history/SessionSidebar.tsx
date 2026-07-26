@@ -18,6 +18,7 @@ type SessionSidebarProps = {
   onDelete?: (sessionId: string) => void
   onOpenSettings?: (tab: 'model' | 'skills' | 'mcp' | 'plugins' | 'memory') => void
   onOpenPerformance?: () => void
+  onOpenScheduledTasks?: () => void
   buddy?: BuddySnapshot | null
   onHatchBuddy?: () => void
   onRehatchBuddy?: () => void
@@ -82,6 +83,7 @@ export function SessionSidebar({
   onDelete,
   onOpenSettings,
   onOpenPerformance,
+  onOpenScheduledTasks,
   buddy,
   onHatchBuddy,
   onRehatchBuddy,
@@ -159,9 +161,10 @@ export function SessionSidebar({
       </nav>
       {onHatchBuddy && onRehatchBuddy && onPetBuddy && onMuteBuddy ? <BuddyPanel state={buddy ?? null} onHatch={onHatchBuddy} onRehatch={onRehatchBuddy} onPet={onPetBuddy} onMute={onMuteBuddy} /> : null}
       <div className="sidebar-actions">
-        {onOpenSettings || onOpenPerformance ? (
+        {onOpenSettings || onOpenPerformance || onOpenScheduledTasks ? (
           <div className="settings-shortcuts" aria-label="配置入口">
             {onOpenPerformance ? <button className="performance-shortcut" type="button" onClick={onOpenPerformance} aria-label="打开性能中心"><span aria-hidden="true">◷</span> 性能</button> : null}
+            {onOpenScheduledTasks ? <button type="button" onClick={onOpenScheduledTasks} aria-label="打开本地定时任务"><span aria-hidden="true">⏱</span> 定时</button> : null}
             {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('model')} aria-label="打开模型配置">
               <span aria-hidden="true">⚙</span>
               模型

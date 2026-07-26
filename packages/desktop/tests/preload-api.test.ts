@@ -31,12 +31,14 @@ describe('createDesktopApi', () => {
       'getConfig',
       'getDiagnostics',
       'getPerformance',
+      'getScheduledTasks',
       'hatchBuddy',
       'interruptGeneration',
       'listSessions',
       'listWorkspaceEditors',
       'openLogFolder',
       'openWorkspaceInEditor',
+      'persistScheduledTask',
       'petBuddy',
       'readFile',
       'readMemory',
@@ -81,9 +83,13 @@ describe('createDesktopApi', () => {
     const api = createDesktopApi(command => commands.push(command), () => () => {}, () => 'request-1')
     api.getPerformance('G:/project', '30d', true)
     api.getAgentMailbox('G:/project')
+    api.getScheduledTasks('G:/project')
+    api.persistScheduledTask('G:/project', '578a7453')
     expect(commands).toEqual([
       { type: 'performance.get', requestId: 'request-1', cwd: 'G:/project', range: '30d', force: true },
       { type: 'agent.mailbox.get', requestId: 'request-1', cwd: 'G:/project' },
+      { type: 'scheduledTasks.get', requestId: 'request-1', cwd: 'G:/project' },
+      { type: 'scheduledTasks.persist', requestId: 'request-1', cwd: 'G:/project', id: '578a7453' },
     ])
   })
 

@@ -39,6 +39,8 @@ export type {
   DesktopPerformanceSnapshot,
   DesktopAgentMailboxMessage,
   DesktopAgentMailboxSnapshot,
+  DesktopScheduledTask,
+  DesktopScheduledTasksSnapshot,
   PermissionDecision,
   PermissionMode,
 } from './types.js'

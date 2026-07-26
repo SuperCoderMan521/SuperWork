@@ -11,6 +11,7 @@ import { SessionService } from './session-service.js'
 import { DesktopBuddyService } from './buddy-service.js'
 import { DesktopPerformanceService } from './performance-service.js'
 import { DesktopAgentMailboxService } from './agent-mailbox-service.js'
+import { DesktopScheduledTasksService } from './scheduled-tasks-service.js'
 
 /**
  * Writes a leveled log line to stderr so it never pollutes the JSON Lines
@@ -100,6 +101,7 @@ async function main(): Promise<void> {
     cwd => configService.modelConfig(cwd),
   )
   const agentMailbox = new DesktopAgentMailboxService()
+  const scheduledTasks = new DesktopScheduledTasksService()
   controller = new DesktopConversationController({
     runQuery: input => queryRunner.run(input),
     emit,
@@ -156,6 +158,8 @@ async function main(): Promise<void> {
     buddy,
     getPerformance: (cwd, range, force) => performance.snapshot(cwd, range, force),
     getAgentMailbox: () => agentMailbox.snapshot(),
+    getScheduledTasks: cwd => scheduledTasks.snapshot(cwd),
+    persistScheduledTask: (cwd, id) => scheduledTasks.persistSessionTask(cwd, id),
   })
 
   logCore('info', 'startup services_ready, entering protocol pump')

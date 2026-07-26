@@ -179,6 +179,74 @@ describe('DesktopEventAdapter', () => {
     ])
   })
 
+  test('reserves display order for indexed streaming text so preceding thinking stays before the answer', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+
+    const [delta] = adapter.consume({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Answer' } },
+    })
+    expect(delta?.type).toBe('message.delta')
+    if (delta?.type !== 'message.delta') throw new Error('missing delta')
+    expect(delta.displayOrder).toBe(2)
+
+    const finalized = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-1',
+      message: { content: [
+        { type: 'thinking', thinking: 'Reason first' },
+        { type: 'text', text: 'Answer' },
+      ] },
+    })
+    const orders = finalized
+      .filter(event => event.type === 'message.added')
+      .map(event => event.message.displayOrder)
+
+    expect(orders).toEqual([1, 2])
+  })
+
+  test('merges repeated thinking blocks before a streamed answer', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+
+    adapter.consume({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' } },
+    })
+
+    const finalized = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-1',
+      message: { content: [
+        { type: 'thinking', thinking: 'Plan the work.' },
+        { type: 'thinking', thinking: 'Check the result.' },
+        { type: 'text', text: 'Answer' },
+      ] },
+    })
+    const messages = finalized
+      .filter(event => event.type === 'message.added')
+      .map(event => event.message)
+
+    expect(messages.map(message => message.kind)).toEqual(['thinking', 'text'])
+    expect(messages[0]?.content).toBe('Plan the work.\n\nCheck the result.')
+    expect(messages[0]?.displayOrder).toBeLessThan(messages[1]?.displayOrder ?? 0)
+  })
+
+  test('uses one display-order base for multiple indexed streaming text blocks in the same assistant message', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+
+    const [first] = adapter.consume({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'First' } },
+    })
+    const [second] = adapter.consume({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 3, delta: { type: 'text_delta', text: 'Second' } },
+    })
+
+    expect(first?.type === 'message.delta' && first.displayOrder).toBe(2)
+    expect(second?.type === 'message.delta' && second.displayOrder).toBe(4)
+  })
+
   test('converts tool use blocks into running tool cards', () => {
     const adapter = new DesktopEventAdapter('session-1', () => 100)
     expect(
@@ -328,5 +396,24 @@ describe('DesktopEventAdapter', () => {
     expect(adapter.consume({ type: 'result', result: '你好！' }).map(event => event.type)).toEqual([
       'turn.usage.completed',
     ])
+  })
+
+  test('does not emit the same assistant text twice when duplicate final messages arrive', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+    const content = 'I will build a snake game with multiple agents.'
+
+    const first = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-1',
+      message: { content: [{ type: 'text', text: content }] },
+    })
+    const second = adapter.consume({
+      type: 'assistant',
+      uuid: 'message-2',
+      message: { content: [{ type: 'text', text: content }] },
+    })
+
+    expect(first.map(event => event.type)).toEqual(['message.added'])
+    expect(second).toEqual([])
   })
 })

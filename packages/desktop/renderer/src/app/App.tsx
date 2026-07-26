@@ -8,6 +8,7 @@ import type {
   DesktopModelConfig,
   DesktopPerformanceRange,
   DesktopPerformanceSnapshot,
+  DesktopScheduledTasksSnapshot,
   DesktopSessionSummary,
   DiagnosticsSnapshot,
 } from '../../../shared/protocol.js'
@@ -23,6 +24,7 @@ import { ConfigCenter, type ConfigTab } from '../features/settings/ConfigCenter.
 import { BrandName } from '../components/BrandName.js'
 import { BuddyPanel } from '../features/buddy/BuddyPanel.js'
 import { PerformanceCenter } from '../features/performance/PerformanceCenter.js'
+import { ScheduledTasksCenter } from '../features/scheduled-tasks/ScheduledTasksCenter.js'
 import type { BuddySnapshot } from '../../../shared/protocol.js'
 import { buildAgentActivity } from '../features/agents/AgentActivityPanel.js'
 import {
@@ -40,7 +42,7 @@ import {
   type DesktopRendererState,
 } from './reducer.js'
 
-type View = 'chat' | 'settings' | 'performance'
+type View = 'chat' | 'settings' | 'performance' | 'scheduledTasks'
 const PROJECT_DEFAULT_CWD = '.'
 const LAST_WORKSPACE_KEY = 'superwork.lastWorkspace'
 
@@ -69,6 +71,15 @@ export function defaultWorkspaceForNewSession(
   return currentSessionCwd || projectDefault
 }
 
+export function defaultWorkspaceFromSources(
+  selectedSessionCwd: string | null | undefined,
+  storedWorkspace: string | null,
+  latestSessionCwd: string | null | undefined,
+  projectDefault = PROJECT_DEFAULT_CWD,
+): string {
+  return selectedSessionCwd ?? storedWorkspace ?? latestSessionCwd ?? projectDefault
+}
+
 export function settingsCwdForConfig(
   currentSessionCwd: string | null | undefined,
   defaultWorkspace: string,
@@ -90,6 +101,21 @@ export function selectSidebarSessions(
     ...live,
     ...state.sessionList.filter(session => !liveIds.has(session.id)),
   ].sort((left, right) => right.updatedAt - left.updatedAt)
+}
+
+function normalizeWorkspacePath(cwd: string): string {
+  return cwd.replace(/[\\/]+$/, '')
+}
+
+export function initialSessionIdForWorkspace(
+  sessions: DesktopSessionSummary[],
+  storedWorkspace: string | null,
+): string | null {
+  if (!storedWorkspace) return sessions[0]?.id ?? null
+  const normalizedStored = normalizeWorkspacePath(storedWorkspace)
+  return sessions.find(
+    session => normalizeWorkspacePath(session.cwd) === normalizedStored,
+  )?.id ?? null
 }
 
 export function tabFromSlash(text: string): ConfigTab | null {
@@ -150,6 +176,9 @@ export function App(): React.ReactNode {
   const [performanceRange, setPerformanceRange] = useState<DesktopPerformanceRange>('30d')
   const [performanceLoading, setPerformanceLoading] = useState(false)
   const [performanceError, setPerformanceError] = useState<string | null>(null)
+  const [scheduledTasks, setScheduledTasks] = useState<DesktopScheduledTasksSnapshot | null>(null)
+  const [scheduledTasksLoading, setScheduledTasksLoading] = useState(false)
+  const [scheduledTasksError, setScheduledTasksError] = useState<string | null>(null)
   const pendingWorkspaceSession = useRef<string | null>(null)
   const pendingPrompt = useRef<string | null>(null)
   const pendingArtifactPath = useRef<string | null>(null)
@@ -159,7 +188,13 @@ export function App(): React.ReactNode {
       if (event.type === 'buddy.snapshot') { setBuddy(event.state); return }
       if (event.type === 'performance.snapshot') { setPerformance(event.snapshot); setPerformanceLoading(false); setPerformanceError(null); return }
       if (event.type === 'agent.mailbox.snapshot') { setAgentMailbox(event.snapshot); return }
-      if (event.type === 'command.failed' && !event.sessionId) { setPerformanceLoading(false); setPerformanceError(event.error.message) }
+      if (event.type === 'scheduledTasks.snapshot') { setScheduledTasks(event.snapshot); setScheduledTasksLoading(false); setScheduledTasksError(null); return }
+      if (event.type === 'command.failed' && !event.sessionId) {
+        setPerformanceLoading(false)
+        setPerformanceError(event.error.message)
+        setScheduledTasksLoading(false)
+        setScheduledTasksError(event.error.message)
+      }
       if (event.type === 'session.snapshot') {
         const createdSessionId = sessionIdFromPendingWorkspaceSnapshot(
           pendingWorkspaceSession.current,
@@ -243,15 +278,21 @@ export function App(): React.ReactNode {
   const agentActivity = selected
     ? buildAgentActivity(selected.tools, selected.toolOrder, agentMailbox)
     : buildAgentActivity({}, [])
-  const defaultWorkspace =
-    selected?.cwd ?? sessions[0]?.cwd ?? storedWorkspace ?? PROJECT_DEFAULT_CWD
+  const defaultWorkspace = defaultWorkspaceFromSources(
+    selected?.cwd,
+    storedWorkspace,
+    sessions[0]?.cwd,
+  )
   const settingsCwd = settingsCwdForConfig(selected?.cwd, defaultWorkspace)
 
   useEffect(() => {
     if (selectedId || state.selectedSessionId) return
-    const latestSession = sessions[0]
-    if (latestSession) setSelectedId(latestSession.id)
-  }, [sessions, selectedId, state.selectedSessionId])
+    const initialSessionId = initialSessionIdForWorkspace(
+      sessions,
+      storedWorkspace,
+    )
+    if (initialSessionId) setSelectedId(initialSessionId)
+  }, [sessions, selectedId, state.selectedSessionId, storedWorkspace])
 
   useEffect(() => {
     if (!selected) return
@@ -285,6 +326,23 @@ export function App(): React.ReactNode {
   const openPerformance = () => {
     setView('performance')
     requestPerformance()
+  }
+
+  const requestScheduledTasks = () => {
+    setScheduledTasksLoading(true)
+    setScheduledTasksError(null)
+    window.desktopApi.getScheduledTasks(defaultWorkspace)
+  }
+
+  const persistScheduledTask = (id: string) => {
+    setScheduledTasksLoading(true)
+    setScheduledTasksError(null)
+    window.desktopApi.persistScheduledTask(defaultWorkspace, id)
+  }
+
+  const openScheduledTasks = () => {
+    setView('scheduledTasks')
+    requestScheduledTasks()
   }
 
   const selectSession = (sessionId: string) => {
@@ -437,6 +495,7 @@ export function App(): React.ReactNode {
       disableCreate={coreStatus !== 'ready'}
       onOpenSettings={openSettings}
       onOpenPerformance={openPerformance}
+      onOpenScheduledTasks={openScheduledTasks}
       buddy={buddy}
       onHatchBuddy={() => window.desktopApi.hatchBuddy()}
       onRehatchBuddy={() => window.desktopApi.rehatchBuddy()}
@@ -591,6 +650,31 @@ export function App(): React.ReactNode {
         <div className="performance-layout">
           {sidebar}
           <PerformanceCenter cwd={defaultWorkspace} range={performanceRange} snapshot={performance} loading={performanceLoading} error={performanceError} onBack={() => setView('chat')} onRefresh={() => requestPerformance(performanceRange, true)} onRangeChange={range => { setPerformanceRange(range); setPerformance(null); requestPerformance(range) }} />
+        </div>
+      ) : view === 'scheduledTasks' ? (
+        <div className="performance-layout">
+          {sidebar}
+          <ScheduledTasksCenter
+            cwd={defaultWorkspace}
+            snapshot={
+              scheduledTasksError
+                ? scheduledTasks
+                  ? { ...scheduledTasks, error: scheduledTasksError }
+                  : {
+                      cwd: defaultWorkspace,
+                      path: `${defaultWorkspace.replace(/[\\/]+$/, '')}/.claude/scheduled_tasks.json`,
+                      generatedAt: Date.now(),
+                      tasks: [],
+                      warnings: [],
+                      error: scheduledTasksError,
+                    }
+                : scheduledTasks
+            }
+            loading={scheduledTasksLoading}
+            onBack={() => setView('chat')}
+            onPersist={persistScheduledTask}
+            onRefresh={requestScheduledTasks}
+          />
         </div>
       ) : (
         chatView

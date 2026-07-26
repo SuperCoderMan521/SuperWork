@@ -6,13 +6,14 @@ import {
 
 describe('DesktopCommandSchema', () => {
   test('accepts a remembered workspace when listing sessions', () => {
-    expect(
-      DesktopCommandSchema.safeParse({
-        type: 'session.list',
-        requestId: 'request-history',
-        cwd: 'K:/ai/12',
-      }).success,
-    ).toBe(true)
+    const result = DesktopCommandSchema.safeParse({
+      type: 'session.list',
+      requestId: 'request-history',
+      cwd: 'K:/ai/12',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.success && result.data.cwd).toBe('K:/ai/12')
   })
 
   test('accepts a prompt submission', () => {

@@ -78,6 +78,25 @@ describe('createDesktopApi', () => {
     ])
   })
 
+  test('includes the remembered workspace when listing sessions', () => {
+    const commands: DesktopCommand[] = []
+    const api = createDesktopApi(
+      command => commands.push(command),
+      () => () => {},
+      () => 'request-1',
+    )
+
+    api.listSessions('K:/ai/12')
+
+    expect(commands).toEqual([
+      {
+        type: 'session.list',
+        requestId: 'request-1',
+        cwd: 'K:/ai/12',
+      },
+    ])
+  })
+
   test('builds a typed performance command', () => {
     const commands: DesktopCommand[] = []
     const api = createDesktopApi(command => commands.push(command), () => () => {}, () => 'request-1')

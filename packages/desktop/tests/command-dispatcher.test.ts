@@ -80,6 +80,7 @@ describe('DesktopCommandDispatcher', () => {
   })
   test('lists existing sessions', async () => {
     const events: DesktopEvent[] = []
+    const listedWorkspaces: Array<string | undefined> = []
     const dispatcher = new DesktopCommandDispatcher({
       controller: {
         createSession: () => {
@@ -90,16 +91,24 @@ describe('DesktopCommandDispatcher', () => {
         setModel: () => {},
         setMode: () => {},
       },
-      listSessions: async () => [
-        { id: 'session-1', title: 'History', cwd: 'G:/project', updatedAt: 1 },
-      ],
+      listSessions: async cwd => {
+        listedWorkspaces.push(cwd)
+        return [
+          { id: 'session-1', title: 'History', cwd: 'G:/project', updatedAt: 1 },
+        ]
+      },
       resolvePermission: () => false,
       emit: event => events.push(event),
       shutdown: async () => {},
     })
 
-    await dispatcher.dispatch({ type: 'session.list', requestId: 'request-1' })
+    await dispatcher.dispatch({
+      type: 'session.list',
+      requestId: 'request-1',
+      cwd: 'K:/ai/12',
+    })
 
+    expect(listedWorkspaces).toEqual(['K:/ai/12'])
     expect(events).toEqual([
       {
         type: 'session.listed',

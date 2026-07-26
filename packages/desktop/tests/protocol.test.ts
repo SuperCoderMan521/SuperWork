@@ -5,6 +5,16 @@ import {
 } from '../shared/schemas.js'
 
 describe('DesktopCommandSchema', () => {
+  test('accepts a remembered workspace when listing sessions', () => {
+    expect(
+      DesktopCommandSchema.safeParse({
+        type: 'session.list',
+        requestId: 'request-history',
+        cwd: 'K:/ai/12',
+      }).success,
+    ).toBe(true)
+  })
+
   test('accepts a prompt submission', () => {
     expect(
       DesktopCommandSchema.safeParse({

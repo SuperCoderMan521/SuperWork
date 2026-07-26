@@ -170,6 +170,92 @@ describe('desktopReducer', () => {
     expect(session.messages['thinking-2']).toBeUndefined()
   })
 
+  test('keeps one assistant answer when duplicate ids arrive in the same user turn', () => {
+    const user = desktopReducer(createDesktopState(), {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 1,
+      message: {
+        id: 'user-1',
+        role: 'user',
+        content: '你好',
+        createdAt: 1,
+        displayOrder: 1,
+      },
+    })
+    const first = desktopReducer(user, {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 2,
+      message: {
+        id: 'assistant-1',
+        role: 'assistant',
+        kind: 'text',
+        content: '你好！有什么我可以帮你的吗？',
+        createdAt: 2,
+        displayOrder: 2,
+      },
+    })
+    const duplicate = desktopReducer(first, {
+      type: 'message.added',
+      sessionId: 'session-1',
+      sequence: 3,
+      message: {
+        id: 'assistant-2',
+        role: 'assistant',
+        kind: 'text',
+        content: '你好！  有什么我可以帮你的吗？',
+        createdAt: 3,
+        displayOrder: 3,
+      },
+    })
+
+    const session = duplicate.sessions['session-1']!
+    expect(session.messageOrder).toEqual(['user-1', 'assistant-1'])
+    expect(session.messages['assistant-1']).toMatchObject({
+      content: '你好！  有什么我可以帮你的吗？',
+      displayOrder: 3,
+    })
+    expect(session.messages['assistant-2']).toBeUndefined()
+  })
+
+  test('allows the same assistant answer in separate user turns', () => {
+    const events = [
+      {
+        type: 'message.added' as const,
+        sessionId: 'session-1',
+        sequence: 1,
+        message: { id: 'user-1', role: 'user' as const, content: '你好', createdAt: 1 },
+      },
+      {
+        type: 'message.added' as const,
+        sessionId: 'session-1',
+        sequence: 2,
+        message: { id: 'assistant-1', role: 'assistant' as const, content: '你好！', createdAt: 2 },
+      },
+      {
+        type: 'message.added' as const,
+        sessionId: 'session-1',
+        sequence: 3,
+        message: { id: 'user-2', role: 'user' as const, content: '再说一次', createdAt: 3 },
+      },
+      {
+        type: 'message.added' as const,
+        sessionId: 'session-1',
+        sequence: 4,
+        message: { id: 'assistant-2', role: 'assistant' as const, content: '你好！', createdAt: 4 },
+      },
+    ]
+    const state = events.reduce(desktopReducer, createDesktopState())
+
+    expect(state.sessions['session-1']?.messageOrder).toEqual([
+      'user-1',
+      'assistant-1',
+      'user-2',
+      'assistant-2',
+    ])
+  })
+
   test('marks a session for resync when sequence has a gap', () => {
     const state = createDesktopState()
     const next = desktopReducer(state, {
@@ -240,6 +326,50 @@ describe('desktopReducer', () => {
 
     expect(next.sessions['session-1']?.messageOrder).toEqual(['assistant-1'])
     expect(next.sessions['session-1']?.messages['assistant-1']?.content).toBe('final answer')
+  })
+
+  test('deduplicates same-turn assistant answers with different ids in a snapshot', () => {
+    const next = desktopReducer(createDesktopState(), {
+      type: 'session.snapshot',
+      sessionId: 'session-1',
+      sequence: 4,
+      session: {
+        id: 'session-1',
+        title: 'Conversation',
+        cwd: 'G:/project',
+        updatedAt: 100,
+        model: 'sonnet',
+        mode: 'default',
+        messages: [
+          { id: 'user-1', role: 'user', content: '你好', createdAt: 1 },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '你好！有什么我可以帮你的吗？',
+            createdAt: 2,
+            displayOrder: 2,
+          },
+          {
+            id: 'assistant-2',
+            role: 'assistant',
+            content: '你好！  有什么我可以帮你的吗？',
+            createdAt: 3,
+            displayOrder: 3,
+          },
+        ],
+        tools: [],
+        generationState: 'idle',
+        sequence: 4,
+      },
+    })
+
+    const session = next.sessions['session-1']!
+    expect(session.messageOrder).toEqual(['user-1', 'assistant-1'])
+    expect(session.messages['assistant-1']).toMatchObject({
+      content: '你好！  有什么我可以帮你的吗？',
+      displayOrder: 3,
+    })
+    expect(session.messages['assistant-2']).toBeUndefined()
   })
 
   test('backfills display order for restored messages without moving new streamed output before history', () => {

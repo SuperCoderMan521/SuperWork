@@ -85,7 +85,7 @@ function toolSummary(input: unknown): string {
 }
 
 function assistantTextSignature(content: string): string {
-  return content.replace(/\s+/g, ' ').trim()
+  return content.replace(/\s+/g, '')
 }
 
 /** Converts unstable query stream shapes into the stable desktop protocol. */

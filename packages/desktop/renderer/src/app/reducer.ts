@@ -76,16 +76,58 @@ function nextDisplayOrder(session: RendererSession): number {
   return (orders.length ? Math.max(...orders) : session.messageOrder.length + session.toolOrder.length) + 1
 }
 
+function assistantTextSignature(message: DesktopMessage): string | undefined {
+  if (
+    message.role !== 'assistant' ||
+    (message.kind !== undefined && message.kind !== 'text')
+  ) {
+    return undefined
+  }
+  const signature = message.content.replace(/\s+/g, '')
+  return signature || undefined
+}
+
+function duplicateAssistantTextId(
+  session: RendererSession,
+  message: DesktopMessage,
+): string | undefined {
+  const signature = assistantTextSignature(message)
+  if (!signature) return undefined
+  for (let index = session.messageOrder.length - 1; index >= 0; index -= 1) {
+    const id = session.messageOrder[index]
+    if (!id || id === message.id) continue
+    const candidate = session.messages[id]
+    if (!candidate) continue
+    if (candidate.role === 'user') break
+    if (assistantTextSignature(candidate) === signature) return id
+  }
+  return undefined
+}
+
 function normalizeSession(session: DesktopSession): RendererSession {
   const messagesById: Record<string, DesktopMessage> = {}
   const messageOrder: string[] = []
+  const assistantTextIds = new Map<string, string>()
   session.messages.forEach((message, index) => {
+    if (message.role === 'user') assistantTextIds.clear()
+    const signature = assistantTextSignature(message)
+    const duplicateId = signature ? assistantTextIds.get(signature) : undefined
+    if (duplicateId && duplicateId !== message.id) {
+      const current = messagesById[duplicateId]
+      messagesById[duplicateId] = {
+        ...message,
+        id: duplicateId,
+        displayOrder: message.displayOrder ?? current?.displayOrder ?? index + 1,
+      }
+      return
+    }
     const current = messagesById[message.id]
     messagesById[message.id] = {
       ...message,
       displayOrder: current?.displayOrder ?? message.displayOrder ?? index + 1,
     }
     if (!current) messageOrder.push(message.id)
+    if (signature) assistantTextIds.set(signature, message.id)
   })
   return {
     ...session,
@@ -139,6 +181,24 @@ function updateSession(
     case 'message.added': {
       const exists = event.message.id in session.messages
       const current = session.messages[event.message.id]
+      const duplicateId = exists
+        ? undefined
+        : duplicateAssistantTextId(session, event.message)
+      if (duplicateId) {
+        const duplicate = session.messages[duplicateId]!
+        session = {
+          ...session,
+          messages: {
+            ...session.messages,
+            [duplicateId]: {
+              ...event.message,
+              id: duplicateId,
+              displayOrder: event.message.displayOrder ?? duplicate.displayOrder,
+            },
+          },
+        }
+        break
+      }
       if (!exists && isThinkingMessage(event.message)) {
         const previousMessageId = session.messageOrder[session.messageOrder.length - 1]
         const previousMessage = previousMessageId ? session.messages[previousMessageId] : undefined

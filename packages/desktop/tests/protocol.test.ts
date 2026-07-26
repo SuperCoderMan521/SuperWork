@@ -13,7 +13,11 @@ describe('DesktopCommandSchema', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.success && result.data.cwd).toBe('K:/ai/12')
+    expect(
+      result.success && result.data.type === 'session.list'
+        ? result.data.cwd
+        : undefined,
+    ).toBe('K:/ai/12')
   })
 
   test('accepts a prompt submission', () => {

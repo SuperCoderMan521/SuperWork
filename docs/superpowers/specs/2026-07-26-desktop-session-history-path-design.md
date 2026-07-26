@@ -19,14 +19,16 @@ switchSession(sessionId, cwd)
 
 ## 方案
 
-### 新会话路径
+### 会话路径激活
 
-在 Desktop QueryEngine 初始化时：
+在 Desktop 每次运行会话时（包括复用已经创建的 QueryEngine）：
 
 1. 调用 `setOriginalCwd(session.cwd)`。
 2. 调用 `switchSession(session.id)`，不传工作目录作为 `sessionProjectDir`。
 
 这样 `getTranscriptPathForSession` 会继续通过 Claude Code 原始逻辑，根据 `originalCwd` 解析 `~/.claude/projects/<sanitized-cwd>/<sessionId>.jsonl`。
+
+必须在每次运行前执行，而不是只在 QueryEngine 首次创建时执行。Bootstrap 会话状态是进程级共享状态；如果用户依次使用多个 Desktop 会话，只在初始化时切换会让后续复用的 QueryEngine 继承另一个会话的存储位置。
 
 ### 旧历史兼容
 
@@ -46,7 +48,7 @@ Renderer 启动时把上次工作目录传给 `session.list`。Core 在列出历
 
 ## 测试
 
-1. 验证 QueryEngine 初始化不再把 `cwd` 传给 `switchSession`。
+1. 验证每次运行会话都会先设置 `originalCwd`，并且不再把 `cwd` 传给 `switchSession`。
 2. 验证旧 UUID JSONL 被复制到标准历史目录。
 3. 验证同名目标存在时不会覆盖。
 4. 验证非 UUID JSONL 不会迁移。

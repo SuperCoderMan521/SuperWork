@@ -87,6 +87,21 @@ Windows 安装包默认输出到 `packages/desktop/release/`。
 
 ![SuperWork 架构总览](./images/architecture.png)
 
+### 核心引擎内部结构
+
+![Claude Code 内核架构](./images/core-architecture.png)
+
+上游 Claude Code 核心引擎的分层结构（SuperWork 通过动态 import 完整复用）：
+
+| 层级 | 模块 | 职责 |
+|------|------|------|
+| Entry | `cli.tsx` → `main.tsx` → `init.ts` | 启动引导、模式路由（REPL / Print / MCP Server） |
+| Agent Loop | `query.ts` (AsyncGenerator) | 模型调用 → 工具执行 → Continue/Stop 状态机 |
+| Services | `api/` · `tools/` · `compact/` · `hooks/` | 流式 API、并发工具编排、上下文压缩、生命周期钩子 |
+| Tools | `packages/builtin-tools/` (59+) | Bash、FileEdit、Grep、Agent、MCP、WebSearch… |
+| Permissions | `utils/permissions/` + `hooks/useCanUseTool` | Rules → Classifier → UI Dialog 三层权限 |
+| TUI | `screens/REPL.tsx` + `components/` (180+) | Ink + React 终端界面 |
+
 ### 进程模型
 
 SuperWork 桌面端采用 **Electron + Bun Core Sidecar** 双进程架构：

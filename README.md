@@ -241,3 +241,7 @@ SuperWork 是基于 `claude-code-best/claude-code` 二次开发的独立学习�
 **如果这个项目对你有帮助，请给一个 Star 支持一下！**
 
 </div>
+
+## Tech Stack
+
+SuperWork is built with Electron, Bun, React 19, Vite, TypeScript, and Zod. It serves as an open-source Claude Code desktop client, AI coding assistant GUI, and agentic coding environment with MCP (Model Context Protocol) support. Related topics: AI pair programming, LLM developer tools, code generation desktop app, Copilot alternative, ChatGPT alternative for coding, Electron sidecar architecture, Bun runtime desktop application.

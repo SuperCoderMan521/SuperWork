@@ -69,6 +69,8 @@ Windows 安装包默认输出到 `packages/desktop/release/`。
 
 ## 系统架构
 
+![SuperWork 架构总览](./images/architecture.png)
+
 ### 进程模型
 
 SuperWork 桌面端采用 **Electron + Bun Core Sidecar** 双进程架构：

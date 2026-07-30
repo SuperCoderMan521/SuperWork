@@ -1,21 +1,34 @@
 # Security Policy
 
-## Supported Versions
+## 支持的版本
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+| 版本 | 安全更新 |
+|------|----------|
+| 2.8.x (main) | :white_check_mark: |
+| < 2.8 | :x: |
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## 报告漏洞
 
-## Reporting a Vulnerability
+如果你发现安全漏洞，请**不要**通过公开 Issue 报告。
 
-Use this section to tell people how to report a vulnerability.
+**报告方式：** 发送邮件至仓库 Owner（通过 GitHub 个人主页联系），标题注明 `[Security] SuperWork`。
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+**响应时间：**
+
+- 收到报告后 48 小时内确认收到
+- 7 天内给出初步评估（是否确认、影响范围、修复计划）
+- 修复发布后通知报告者
+
+**请包含：**
+
+- 漏洞描述与复现步骤
+- 受影响的版本/组件
+- 可能的影响范围
+- 如有可能，附上 PoC
+
+## 安全设计要点
+
+- 渲染层通过 `contextBridge` 最小化暴露，不直接暴露 `ipcRenderer`
+- 所有跨进程命令经 Zod schema 校验
+- 导航限制：阻止 `will-navigate`，新窗口仅允许 `https://` 外部打开
+- Sidecar 崩溃自动重启，二次失败标记永久失败

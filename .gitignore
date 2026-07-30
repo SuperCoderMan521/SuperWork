@@ -80,3 +80,9 @@ credentials.json
 .test-progress.md
 .squash-tmp/
 .git.*-backup
+
+# Misc generated artifacts
+*.pptx
+*.bak
+*.plantuml
+*.puml

@@ -950,8 +950,177 @@ describe('desktop chat UI', () => {
     expect(html).toContain('运行中')
   })
 
-  test('merges read-only mailbox messages into agent activity', () => {
+  test('groups subagent work files by tool ownership metadata', () => {
+    const activity = buildAgentActivity(
+      {
+        write: {
+          id: 'write',
+          name: 'Write',
+          state: 'success',
+          summary: 'src/worker-output.ts',
+          input: { file_path: 'src/worker-output.ts' },
+          agentId: 'worker@alpha',
+          agentName: 'worker',
+          teamName: 'alpha',
+        },
+        edit: {
+          id: 'edit',
+          name: 'Edit',
+          state: 'success',
+          summary: 'src/reviewer-notes.md',
+          input: {
+            file_path: 'src/reviewer-notes.md',
+            old_string: 'todo',
+            new_string: 'done',
+          },
+          agentId: 'reviewer@alpha',
+          agentName: 'reviewer',
+          teamName: 'alpha',
+        },
+      },
+      ['write', 'edit'],
+    )
+
+    expect(activity.summary.fileCount).toBe(2)
+    expect(activity.agents.find(agent => agent.name === 'worker')?.files.map(file => file.path)).toEqual([
+      'src/worker-output.ts',
+    ])
+    expect(activity.agents.find(agent => agent.name === 'reviewer')?.files.map(file => file.path)).toEqual([
+      'src/reviewer-notes.md',
+    ])
+
+    const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
+    expect(html).toContain('Work files')
+    expect(html).toContain('<details')
+    expect(html).toContain('<summary')
+    expect(html).toContain('worker-output.ts')
+    expect(html).toContain('reviewer-notes.md')
+  })
+
+  test('builds team activity from ExecuteExtraTool wrapped TeamCreate calls', () => {
+    const activity = buildAgentActivity(
+      {
+        team: {
+          id: 'team',
+          name: 'ExecuteExtraTool',
+          state: 'success',
+          summary: 'TeamCreate',
+          input: {
+            tool_name: 'TeamCreate',
+            params: {
+              team_name: 'coupon-team',
+              description: 'build coupon system',
+            },
+          },
+          output: JSON.stringify({
+            tool_name: 'TeamCreate',
+            result: {
+              success: true,
+              team_name: 'coupon-team',
+            },
+          }),
+        },
+      },
+      ['team'],
+    )
+
+    expect(activity.teamName).toBe('coupon-team')
+    const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
+    expect(html).toContain('coupon-team')
+  })
+
+  test('describes completed agents as finished instead of waiting for tasks', () => {
+    const activity = buildAgentActivity(
+      {
+        agent: {
+          id: 'agent',
+          name: 'Agent',
+          state: 'success',
+          summary: 'backend',
+          input: {
+            name: 'backend',
+            team_name: 'user-system',
+          },
+        },
+      },
+      ['agent'],
+    )
+
+    const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
+    expect(html).toContain('backend')
+    expect(html).toContain('执行完成')
+    expect(html).not.toContain('等待任务')
+  })
+
+  test('uses live teammate status over the completed outer Agent call', () => {
+    const activity = buildAgentActivity(
+      {
+        outer: {
+          id: 'outer',
+          name: 'Agent',
+          state: 'success',
+          summary: 'backend',
+          input: {
+            name: 'backend',
+            team_name: 'user-system',
+          },
+        },
+        live: {
+          id: 'live',
+          name: 'Agent',
+          state: 'running',
+          summary: 'backend',
+          input: {
+            name: 'backend',
+            team_name: 'user-system',
+            desktop_status: 'running',
+            desktop_idle: false,
+          },
+          agentId: 'backend@user-system',
+          agentName: 'backend',
+          teamName: 'user-system',
+        },
+      },
+      ['outer', 'live'],
+    )
+
+    expect(activity.agents.find(agent => agent.name === 'backend')?.status).toBe('running')
+    const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
+    expect(html).toContain('正在执行')
+  })
+
+  test('does not show historical mailbox agents when the current session has no agent context', () => {
     const activity = buildAgentActivity({}, [], {
+      generatedAt: 100,
+      teams: [{
+        name: 'old-team',
+        inboxes: [{
+          agentName: 'team-lead',
+          messages: [{
+            from: 'historical-agent',
+            text: 'old message',
+            timestamp: '2026-07-26T00:00:00.000Z',
+            read: false,
+          }],
+        }],
+      }],
+    })
+
+    expect(activity.teamName).toBeNull()
+    expect(activity.agents).toEqual([])
+    expect(activity.messages).toEqual([])
+  })
+
+  test('merges read-only mailbox messages into matching session agent activity', () => {
+    const activity = buildAgentActivity({
+      team: {
+        id: 'team',
+        name: 'TeamCreate',
+        state: 'success',
+        summary: 'mail-team',
+        input: { team_name: 'mail-team' },
+      },
+    }, ['team'], {
       generatedAt: 100,
       teams: [{
         name: 'mail-team',
@@ -975,6 +1144,10 @@ describe('desktop chat UI', () => {
       to: 'team-lead',
       text: '已完成代码搜索',
     })
+    const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
+    expect(html).toContain('<details')
+    expect(html).toContain('<summary')
+    expect(html).toContain('researcher')
   })
 
   test('calculates edit diff blocks and tool icons', () => {

@@ -120,6 +120,9 @@ export const DesktopToolCallSchema = z.object({
   startedAt: z.number().int().nonnegative().optional(),
   completedAt: z.number().int().nonnegative().optional(),
   displayOrder: z.number().int().nonnegative().optional(),
+  agentId: z.string().min(1).optional(),
+  agentName: z.string().min(1).optional(),
+  teamName: z.string().min(1).optional(),
 })
 
 export const DesktopPermissionRequestSchema = z.object({

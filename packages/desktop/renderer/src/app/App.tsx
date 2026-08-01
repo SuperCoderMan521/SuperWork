@@ -565,9 +565,14 @@ export function App(): React.ReactNode {
             onOpenAgents={openAgents}
             artifacts={localArtifacts}
             onOpenArtifact={openArtifact}
-          onResolvePermission={(permissionId, decision, payload) =>
+          onResolvePermission={(permissionId, decision, payload) => {
+            dispatch({
+              type: 'renderer.permissionResolved',
+              sessionId: selected.id,
+              permissionId,
+            })
             window.desktopApi.resolvePermission(permissionId, decision, payload)
-          }
+          }}
           error={state.lastError}
           onDismissError={() => dispatch({ type: 'renderer.clearError' })}
           onOpenDiagnostics={() => void refreshDiagnostics()}

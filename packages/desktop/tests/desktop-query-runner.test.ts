@@ -10,6 +10,7 @@ import {
   desktopSlashFallback,
   mergeInteractivePayload,
   nextResultWithTimeout,
+  nextResultWithMirrorTicks,
   parseAskUserQuestionPayload,
   subscribeInterrupt,
   toCorePermissionDecision,
@@ -122,6 +123,28 @@ describe('nextResultWithTimeout', () => {
     ).rejects.toThrow('首包等待超时')
 
     expect(timedOut).toBe(1)
+  })
+})
+
+describe('nextResultWithMirrorTicks', () => {
+  test('yields mirrored teammate events while waiting for the next query event', async () => {
+    let resolveNext: ((value: IteratorResult<string>) => void) | undefined
+    const nextPromise = new Promise<IteratorResult<string>>(resolve => {
+      resolveNext = resolve
+    })
+    let mirrorCalls = 0
+    const iterator = nextResultWithMirrorTicks(
+      () => nextPromise,
+      () => {
+        mirrorCalls += 1
+        return mirrorCalls === 1 ? ['mirrored-tool'] : []
+      },
+      { mirrorIntervalMs: 1 },
+    )[Symbol.asyncIterator]()
+
+    expect(await iterator.next()).toEqual({ done: false, value: 'mirrored-tool' })
+    resolveNext?.({ done: false, value: 'query-event' })
+    expect(await iterator.next()).toEqual({ done: true, value: { done: false, value: 'query-event' } })
   })
 })
 

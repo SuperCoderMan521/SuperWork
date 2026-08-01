@@ -87,7 +87,7 @@ export function WorkspacePanel({
       </header>
       <div className="workspace-panel-body">
         {activeTab === 'agents' ? (
-          <AgentActivityPanel activity={agentActivity} />
+          <AgentActivityPanel activity={agentActivity} onOpenFile={onOpenFile} />
         ) : activeTab === 'artifacts' ? (
           <LocalArtifactsPanel
             artifacts={artifacts}

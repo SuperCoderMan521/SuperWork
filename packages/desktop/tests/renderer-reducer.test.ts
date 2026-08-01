@@ -445,6 +445,53 @@ describe('desktopReducer', () => {
     expect(completed.sessions['session-1']?.permissionOrder).toEqual([])
   })
 
+  test('removes a resolved permission immediately so queued worker approvals can continue', () => {
+    const first = desktopReducer(createDesktopState(), {
+      type: 'permission.requested',
+      sessionId: 'session-1',
+      sequence: 1,
+      request: {
+        id: 'permission-1',
+        toolCallId: 'tool-worker-1',
+        toolName: 'Write',
+        summary: 'first',
+        input: {},
+        decisions: ['deny', 'allow_once'],
+        agentName: 'architect-lead',
+      },
+    })
+    const queued = desktopReducer(first, {
+      type: 'permission.requested',
+      sessionId: 'session-1',
+      sequence: 2,
+      request: {
+        id: 'permission-2',
+        toolCallId: 'tool-worker-2',
+        toolName: 'Write',
+        summary: 'second',
+        input: {},
+        decisions: ['deny', 'allow_once'],
+        agentName: 'architect-lead',
+      },
+    })
+
+    const resolved = desktopReducer(queued, {
+      type: 'renderer.permissionResolved',
+      sessionId: 'session-1',
+      permissionId: 'permission-1',
+    })
+
+    expect(resolved.sessions['session-1']?.permissionOrder).toEqual([
+      'permission-2',
+    ])
+    expect(
+      resolved.sessions['session-1']?.permissions['permission-1'],
+    ).toBeUndefined()
+    expect(
+      resolved.sessions['session-1']?.permissions['permission-2']?.summary,
+    ).toBe('second')
+  })
+
   test('marks the source session failed when a command fails', () => {
     const state = desktopReducer(createDesktopState(), {
       type: 'session.snapshot',

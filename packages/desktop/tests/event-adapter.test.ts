@@ -2,6 +2,37 @@ import { describe, expect, test } from 'bun:test'
 import { DesktopEventAdapter } from '../core/event-adapter.js'
 
 describe('DesktopEventAdapter', () => {
+  test('preserves subagent ownership metadata on tool events', () => {
+    const adapter = new DesktopEventAdapter('session-1', () => 100)
+    const [event] = adapter.consume({
+      type: 'assistant',
+      uuid: 'agent-message-1',
+      agent_id: 'worker@alpha',
+      agent_name: 'worker',
+      team_name: 'alpha',
+      message: {
+        content: [{
+          type: 'tool_use',
+          id: 'tool-1',
+          name: 'Write',
+          input: { file_path: 'src/agent-output.ts' },
+        }],
+      },
+    })
+
+    expect(event).toMatchObject({
+      type: 'tool.updated',
+      tool: {
+        id: 'tool-1',
+        name: 'Write',
+        agentId: 'worker@alpha',
+        agentName: 'worker',
+        teamName: 'alpha',
+        input: { file_path: 'src/agent-output.ts' },
+      },
+    })
+  })
+
   test('emits one priced usage report for multiple model calls', () => {
     let now = 100
     const adapter = new DesktopEventAdapter('session-1', () => now, 0, false, {

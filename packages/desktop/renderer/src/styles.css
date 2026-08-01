@@ -407,8 +407,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .agent-section-title { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
 .agent-section-title h3 { margin: 0; color: #e6e7e9; font-size: 12px; }
 .agent-section-title span, .agent-muted { color: var(--muted); font-size: 11px; }
-.agent-task-list, .agent-list, .agent-message-list { display: grid; gap: 7px; }
-.agent-task-card, .agent-card, .agent-message { border: 1px solid #262930; border-radius: 13px; padding: 10px; background: rgba(22,24,28,.88); }
+.agent-task-list, .agent-list, .agent-message-list, .agent-file-list { display: grid; gap: 7px; }
+.agent-task-card, .agent-card, .agent-message, .agent-file-card { border: 1px solid #262930; border-radius: 13px; padding: 10px; background: rgba(22,24,28,.88); }
 .agent-task-card { display: grid; gap: 8px; }
 .task-status-line { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .task-status-line strong { overflow: hidden; color: #e8e9eb; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -429,8 +429,26 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .agent-running { border-color: rgba(80,168,255,.34); background: rgba(28,38,51,.82); }
 .agent-failed { border-color: rgba(214,111,121,.35); }
 .agent-message { display: grid; gap: 5px; }
+.agent-message summary { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; align-items: center; cursor: pointer; list-style: none; }
+.agent-message summary::-webkit-details-marker { display: none; }
+.agent-message summary::before { content: '▸'; color: #8f9399; font-size: 10px; transition: transform .16s ease; }
+.agent-message[open] summary::before { transform: rotate(90deg); }
 .agent-message span { color: #d77757; font-size: 10px; font-weight: 700; }
+.agent-message small { overflow: hidden; color: #a9adb4; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .message-assignment { border-color: rgba(215,119,87,.34); background: rgba(42,31,26,.76); }
+.agent-files-title { margin-top: 4px; }
+.agent-file-card { display: grid; gap: 8px; }
+.agent-file-card summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
+.agent-file-card summary::-webkit-details-marker { display: none; }
+.agent-file-card summary::before { content: '▸'; color: #8f9399; font-size: 10px; transition: transform .16s ease; }
+.agent-file-card[open] summary::before { transform: rotate(90deg); }
+.agent-file-card strong { overflow: hidden; color: #f0f1f2; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-file-card summary span { margin-left: auto; color: #8f9399; font-size: 10px; white-space: nowrap; }
+.agent-file-card div { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid #25282d; }
+.agent-file-card button { display: grid; gap: 3px; width: 100%; min-width: 0; border: 1px solid #2a2d33; border-radius: 10px; padding: 8px; color: inherit; background: #14161a; text-align: left; }
+.agent-file-card button:hover { border-color: rgba(215,119,87,.42); background: rgba(215,119,87,.08); }
+.agent-file-card button span { overflow: hidden; color: #e7e8ea; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-file-card button small { overflow: hidden; color: #858a92; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 
 .settings-page { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; border: 1px solid #202226; border-radius: 18px; background: var(--surface); box-shadow: 0 18px 60px rgba(0,0,0,.34); }
 .settings-sidebar { display: grid; align-content: start; gap: 14px; padding: 18px 14px; border-right: 1px solid var(--border); background: #111214; }

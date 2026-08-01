@@ -2,6 +2,10 @@ import type {
   DesktopAgentMailboxSnapshot,
   DesktopToolCall,
 } from '../../../../shared/protocol.js'
+import {
+  filesFromTools,
+  type ConversationFileEntry,
+} from '../files/ConversationFilesPanel.js'
 
 export type AgentTaskStatus =
   | 'pending'
@@ -12,11 +16,13 @@ export type AgentTaskStatus =
 
 export type ObservedAgent = {
   name: string
+  id?: string
   type?: string
   teamName?: string
   status: 'idle' | 'running' | 'completed' | 'failed' | 'waiting'
   currentTasks: string[]
   completedTasks: number
+  files: ConversationFileEntry[]
 }
 
 export type ObservedTask = {
@@ -51,6 +57,7 @@ export type AgentActivity = {
     completedTasks: number
     blockedTasks: number
     messageCount: number
+    fileCount: number
   }
 }
 
@@ -93,12 +100,59 @@ function taskIdFromCreate(tool: DesktopToolCall, fallbackIndex: number): string 
 function displayAgentName(tool: DesktopToolCall, fallbackIndex: number): string {
   const input = asRecord(tool.input)
   return (
+    tool.agentName ??
+    agentNameFromId(tool.agentId) ??
     stringField(input, 'name') ??
     stringField(input, 'agent_name') ??
     stringField(input, 'to') ??
     tool.summary ??
     `agent-${fallbackIndex + 1}`
   )
+}
+
+function agentNameFromId(agentId: string | undefined): string | undefined {
+  if (!agentId) return undefined
+  const [name] = agentId.split('@', 1)
+  return name || agentId
+}
+
+function agentKeyForTool(tool: DesktopToolCall): string | undefined {
+  return tool.agentName ?? agentNameFromId(tool.agentId)
+}
+
+type EffectiveTool = {
+  name: string
+  input: Record<string, unknown>
+  output: Record<string, unknown>
+}
+
+function effectiveTool(tool: DesktopToolCall): EffectiveTool {
+  const input = asRecord(tool.input)
+  const normalized = tool.name.toLowerCase()
+  if (normalized === 'executeextratool') {
+    const toolName = stringField(input, 'tool_name')
+    const params = asRecord(input.params)
+    const output = parseJsonRecord(tool.output)
+    const result = asRecord(output.result)
+    return {
+      name: toolName ?? tool.name,
+      input: params,
+      output: result,
+    }
+  }
+  return {
+    name: tool.name,
+    input,
+    output: parseJsonRecord(tool.output),
+  }
+}
+
+function isAgentControlTool(toolName: string): boolean {
+  return toolName === 'agent' ||
+    toolName === 'teamcreate' ||
+    toolName === 'taskcreate' ||
+    toolName === 'taskupdate' ||
+    toolName === 'sendmessage'
 }
 
 function textFromMessage(value: unknown): string {
@@ -131,7 +185,28 @@ function agentLabel(status: ObservedAgent['status']): string {
   return '空闲'
 }
 
+function agentDescription(agent: ObservedAgent): string {
+  if (agent.currentTasks[0]) return agent.currentTasks[0]
+  if (agent.completedTasks > 0) return `已完成 ${agent.completedTasks} 个任务`
+  if (agent.status === 'running') return '正在执行'
+  if (agent.status === 'completed') return '执行完成'
+  if (agent.status === 'failed') return '执行失败'
+  if (agent.status === 'waiting') return '等待响应'
+  return '等待任务'
+}
+
+function compactText(text: string, maxLength = 56): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, maxLength)}…`
+}
+
 function taskStatusFromToolState(tool: DesktopToolCall): ObservedAgent['status'] {
+  const input = asRecord(tool.input)
+  const desktopStatus = stringField(input, 'desktop_status')
+  if (desktopStatus === 'running' || desktopStatus === 'pending') return 'running'
+  if (desktopStatus === 'completed') return 'completed'
+  if (desktopStatus === 'failed' || desktopStatus === 'killed') return 'failed'
   if (tool.state === 'running' || tool.state === 'pending') return 'running'
   if (tool.state === 'success') return 'completed'
   if (tool.state === 'error') return 'failed'
@@ -147,12 +222,22 @@ export function buildAgentActivity(
   const agents = new Map<string, ObservedAgent>()
   const tasks = new Map<string, ObservedTask>()
   const messages: ObservedAgentMessage[] = []
+  const toolsByAgent = new Map<string, { tools: Record<string, DesktopToolCall>; order: string[] }>()
 
   for (const [index, id] of order.entries()) {
     const tool = tools[id]
     if (!tool) continue
-    const input = asRecord(tool.input)
-    const name = tool.name.toLowerCase()
+    const effective = effectiveTool(tool)
+    const input = effective.input
+    const name = effective.name.toLowerCase()
+    const agentKey = agentKeyForTool(tool)
+
+    if (agentKey && !isAgentControlTool(name)) {
+      const bucket = toolsByAgent.get(agentKey) ?? { tools: {}, order: [] }
+      bucket.tools[id] = tool
+      bucket.order.push(id)
+      toolsByAgent.set(agentKey, bucket)
+    }
 
     if (name === 'teamcreate') {
       teamName = stringField(input, 'team_name') ?? stringField(input, 'teamName') ?? tool.summary ?? teamName
@@ -169,11 +254,13 @@ export function buildAgentActivity(
           name: agentName,
           currentTasks: [],
           completedTasks: 0,
+          files: [],
           status,
         }),
         name: agentName,
+        id: tool.agentId,
         type: stringField(input, 'subagent_type') ?? stringField(input, 'agent_type'),
-        teamName: agentTeamName,
+        teamName: tool.teamName ?? agentTeamName,
         status,
       })
     }
@@ -211,6 +298,7 @@ export function buildAgentActivity(
             status: 'idle' as const,
             currentTasks: [],
             completedTasks: 0,
+            files: [],
           }
           agents.set(owner, {
             ...agent,
@@ -245,9 +333,9 @@ export function buildAgentActivity(
     }
   }
 
-  if (mailbox) {
+  if (mailbox && teamName) {
     for (const team of mailbox.teams) {
-      if (!teamName) teamName = team.name
+      if (team.name !== teamName) continue
       for (const inbox of team.inboxes) {
         const recipient = inbox.agentName
         if (recipient !== 'team-lead' && !agents.has(recipient)) {
@@ -257,6 +345,7 @@ export function buildAgentActivity(
             status: 'idle',
             currentTasks: [],
             completedTasks: 0,
+            files: [],
           })
         }
 
@@ -275,6 +364,7 @@ export function buildAgentActivity(
               status: 'idle',
               currentTasks: [],
               completedTasks: 0,
+              files: [],
             })
           }
           messages.push({
@@ -290,6 +380,25 @@ export function buildAgentActivity(
     }
   }
 
+  for (const [agentName, bucket] of toolsByAgent.entries()) {
+    const representative = Object.values(bucket.tools).find(tool => tool.agentId || tool.teamName)
+    const agent = agents.get(agentName) ?? {
+      name: agentName,
+      id: representative?.agentId,
+      teamName: representative?.teamName ?? teamName ?? undefined,
+      status: 'idle' as const,
+      currentTasks: [],
+      completedTasks: 0,
+      files: [],
+    }
+    agents.set(agentName, {
+      ...agent,
+      id: agent.id ?? representative?.agentId,
+      teamName: agent.teamName ?? representative?.teamName ?? teamName ?? undefined,
+      files: filesFromTools(bucket.tools, bucket.order),
+    })
+  }
+
   const taskList = Array.from(tasks.values())
   for (const agent of agents.values()) {
     const owned = taskList.filter(task => task.owner === agent.name)
@@ -303,6 +412,7 @@ export function buildAgentActivity(
   }
 
   const agentList = Array.from(agents.values())
+  const fileCount = agentList.reduce((count, agent) => count + agent.files.length, 0)
   return {
     teamName,
     agents: agentList,
@@ -320,19 +430,24 @@ export function buildAgentActivity(
       completedTasks: taskList.filter(task => task.status === 'completed').length,
       blockedTasks: taskList.filter(task => task.status === 'blocked').length,
       messageCount: messages.length,
+      fileCount,
     },
   }
 }
 
 export function AgentActivityPanel({
   activity,
+  onOpenFile,
 }: {
   activity: AgentActivity
+  onOpenFile?: (path: string) => void
 }): React.ReactNode {
   const hasActivity =
     activity.agents.length > 0 ||
     activity.tasks.length > 0 ||
-    activity.messages.length > 0
+    activity.messages.length > 0 ||
+    activity.summary.fileCount > 0
+  const workFiles = activity.agents.filter(agent => agent.files.length > 0)
 
   return (
     <aside className="agent-observer-panel">
@@ -398,7 +513,7 @@ export function AgentActivityPanel({
                     <strong>{agent.name}</strong>
                     <span>{agent.type ?? 'agent'} · {agentLabel(agent.status)}</span>
                   </div>
-                  <p>{agent.currentTasks[0] ?? (agent.completedTasks > 0 ? `已完成 ${agent.completedTasks} 个任务` : '等待任务')}</p>
+                  <p>{agentDescription(agent)}</p>
                 </article>
               ))}
             </div>
@@ -409,14 +524,45 @@ export function AgentActivityPanel({
               <h3>通信</h3>
               <span>最近 {activity.messages.length} 条</span>
             </div>
+            <div className="agent-section-title agent-files-title">
+              <h3>Work files</h3>
+              <span>{activity.summary.fileCount} files</span>
+            </div>
+            <div className="agent-file-list">
+              {activity.summary.fileCount === 0 ? (
+                <p className="agent-muted">No subagent file activity yet</p>
+              ) : workFiles.map(agent => (
+                <details key={`${agent.name}-files`} className="agent-file-card">
+                  <summary>
+                    <strong>{agent.name}</strong>
+                    <span>{agent.files.length} files</span>
+                  </summary>
+                  <div>
+                    {agent.files.map(file => (
+                      <button
+                        key={file.id}
+                        type="button"
+                        onClick={() => onOpenFile?.(file.path)}
+                      >
+                        <span>{file.label}</span>
+                        <small>{file.path}</small>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
             <div className="agent-message-list">
               {activity.messages.length === 0 ? (
                 <p className="agent-muted">暂无通信消息</p>
               ) : activity.messages.map((message, index) => (
-                <article key={`${message.from}-${message.to}-${message.timestamp ?? index}`} className={`agent-message message-${message.kind}`}>
-                  <span>{message.from} → {message.to}</span>
+                <details key={`${message.from}-${message.to}-${message.timestamp ?? index}`} className={`agent-message message-${message.kind}`}>
+                  <summary>
+                    <span>{message.from} → {message.to}</span>
+                    <small>{compactText(message.summary ?? message.text)}</small>
+                  </summary>
                   <p>{message.text}</p>
-                </article>
+                </details>
               ))}
             </div>
           </section>

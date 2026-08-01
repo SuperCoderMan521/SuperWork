@@ -20,8 +20,33 @@ describe('PermissionBroker', () => {
 
     expect(requests).toEqual(['permission-1'])
     expect(broker.resolve('permission-1', 'allow_once')).toBe(true)
-    expect(await decision).toBe('allow_once')
+    expect(await decision).toEqual({ decision: 'allow_once' })
     expect(broker.pendingCount).toBe(0)
+  })
+
+  test('carries an interactive payload with the resolution', async () => {
+    const broker = new PermissionBroker({
+      createId: () => 'permission-1',
+      emit: () => {},
+    })
+    const resolution = broker.request({
+      sessionId: 'session-1',
+      toolCallId: 'tool-1',
+      toolName: 'AskUserQuestion',
+      summary: 'Which library?',
+      input: { questions: [] },
+      allowSession: false,
+    })
+
+    expect(
+      broker.resolve('permission-1', 'allow_once', {
+        answers: { 'Which library?': 'date-fns' },
+      }),
+    ).toBe(true)
+    expect(await resolution).toEqual({
+      decision: 'allow_once',
+      payload: { answers: { 'Which library?': 'date-fns' } },
+    })
   })
 
   test('rejects duplicate and unknown resolutions', async () => {
@@ -41,7 +66,7 @@ describe('PermissionBroker', () => {
     expect(broker.resolve('permission-1', 'deny')).toBe(true)
     expect(broker.resolve('permission-1', 'deny')).toBe(false)
     expect(broker.resolve('missing', 'deny')).toBe(false)
-    expect(await decision).toBe('deny')
+    expect(await decision).toEqual({ decision: 'deny' })
   })
 
   test('denies every pending request for an interrupted session', async () => {
@@ -68,9 +93,9 @@ describe('PermissionBroker', () => {
     })
 
     expect(broker.cancelSession('session-1')).toBe(1)
-    expect(await first).toBe('deny')
+    expect(await first).toEqual({ decision: 'deny' })
     expect(broker.pendingCount).toBe(1)
     broker.resolve('permission-2', 'allow_session')
-    expect(await second).toBe('allow_session')
+    expect(await second).toEqual({ decision: 'allow_session' })
   })
 })

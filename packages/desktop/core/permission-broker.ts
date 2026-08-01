@@ -13,9 +13,15 @@ export type PermissionRequestInput = {
   allowSession: boolean
 }
 
+/** The user's answer to a permission request, with optional interactive data. */
+export type PermissionResolution = {
+  decision: PermissionDecision
+  payload?: unknown
+}
+
 type PendingPermission = {
   sessionId: string
-  resolve: (decision: PermissionDecision) => void
+  resolve: (resolution: PermissionResolution) => void
   timeout: ReturnType<typeof setTimeout>
 }
 
@@ -40,7 +46,7 @@ export class PermissionBroker {
     return this.pending.size
   }
 
-  request(input: PermissionRequestInput): Promise<PermissionDecision> {
+  request(input: PermissionRequestInput): Promise<PermissionResolution> {
     const id = this.createId()
     const decisions: PermissionDecision[] = input.allowSession
       ? ['deny', 'allow_once', 'allow_session']
@@ -63,13 +69,13 @@ export class PermissionBroker {
     })
   }
 
-  resolve(id: string, decision: PermissionDecision): boolean {
+  resolve(id: string, decision: PermissionDecision, payload?: unknown): boolean {
     const pending = this.pending.get(id)
     if (!pending) return false
 
     clearTimeout(pending.timeout)
     this.pending.delete(id)
-    pending.resolve(decision)
+    pending.resolve(payload === undefined ? { decision } : { decision, payload })
     return true
   }
 

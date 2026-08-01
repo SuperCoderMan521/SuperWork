@@ -277,6 +277,9 @@ export const DesktopCommandSchema = z.discriminatedUnion('type', [
     type: z.literal('permission.resolve'),
     permissionId: IdSchema,
     decision: PermissionDecisionSchema,
+    // Optional data payload collected by an interactive approval UI
+    // (e.g. AskUserQuestion answers). Forwarded to the tool's updatedInput.
+    payload: z.unknown().optional(),
   }),
   SessionRequestSchema.extend({
     type: z.literal('model.set'),

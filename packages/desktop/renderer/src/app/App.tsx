@@ -565,8 +565,8 @@ export function App(): React.ReactNode {
             onOpenAgents={openAgents}
             artifacts={localArtifacts}
             onOpenArtifact={openArtifact}
-          onResolvePermission={(permissionId, decision) =>
-            window.desktopApi.resolvePermission(permissionId, decision)
+          onResolvePermission={(permissionId, decision, payload) =>
+            window.desktopApi.resolvePermission(permissionId, decision, payload)
           }
           error={state.lastError}
           onDismissError={() => dispatch({ type: 'renderer.clearError' })}
@@ -632,7 +632,6 @@ export function App(): React.ReactNode {
           }
           onModelConfigChange={writeModelConfig}
           onTestModelConfig={testModelConfig}
-          onRefresh={refreshConfig}
           onReadMemory={path => window.desktopApi.readMemory(path)}
           onCreateMemory={createMemory}
           onSaveMemory={(path, content) =>

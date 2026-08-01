@@ -81,6 +81,12 @@ function toolSummary(input: unknown): string {
     const value = stringProperty(input, key)
     if (value) return value
   }
+  // AskUserQuestion: surface the first question so the tool card is readable.
+  const questions = input.questions
+  if (Array.isArray(questions) && isRecord(questions[0])) {
+    const question = stringProperty(questions[0], 'question')
+    if (question) return question
+  }
   return ''
 }
 

@@ -182,7 +182,7 @@ export function createPermissionRequestMessage(
         }
         if (needsApproval.length > 0) {
           const n = needsApproval.length
-          return `This ${toolName} command contains multiple operations. The following ${plural(n, 'part')} ${plural(n, 'requires', 'require')} approval: ${needsApproval.join(', ')}`
+          return `This ${toolName} command contains multiple operations. The following ${plural(n, 'part')} ${plural(n, 'requires', 'require')} approval:\n${needsApproval.map((c, i) => `  ${i + 1}. ${c}`).join('\n')}`
         }
         return `This ${toolName} command contains multiple operations that require approval`
       }

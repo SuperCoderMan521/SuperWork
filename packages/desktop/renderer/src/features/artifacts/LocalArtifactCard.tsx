@@ -18,33 +18,33 @@ export function LocalArtifactCard({
 }: LocalArtifactCardProps): React.ReactNode {
   return (
     <article className={`local-artifact-card local-artifact-${artifact.kind}`}>
-      <div className="local-artifact-card-main">
-        <span className="local-artifact-card-icon" aria-hidden="true">
-          ◈
-        </span>
-        <div>
-          <strong>Local Artifact</strong>
-          <p>{artifact.title}</p>
-        </div>
-      </div>
-      <div className="local-artifact-card-meta">
-        <span>{artifact.kind}</span>
-        <span>{artifact.source === 'file' ? '本地文件' : '当前对话'}</span>
-      </div>
-      <div className="local-artifact-card-actions">
+      <div
+        className="local-artifact-card-actions"
+        role="group"
+        aria-label="本地工件操作"
+      >
         {onOpenArtifact ? (
-          <button type="button" onClick={() => onOpenArtifact(artifact)}>
+          <button
+            type="button"
+            onClick={() => onOpenArtifact(artifact)}
+            title={`预览 ${artifact.title}`}
+          >
             预览
           </button>
         ) : null}
         {artifact.path && onOpenFile ? (
-          <button type="button" onClick={() => onOpenFile(artifact.path!)}>
+          <button
+            type="button"
+            onClick={() => onOpenFile(artifact.path!)}
+            title={`打开 ${artifact.title}`}
+          >
             打开
           </button>
         ) : null}
         <button
           type="button"
           onClick={() => copyText(artifact.path ?? artifact.content)}
+          title="复制内容"
         >
           复制
         </button>

@@ -155,7 +155,7 @@ async function main(): Promise<void> {
       emit({ type: 'session.deleted', sessionId })
     },
     emitSnapshot: sessionId => controller?.emitCurrentSnapshot(sessionId),
-    resolvePermission: (id, decision) => permissionBroker.resolve(id, decision),
+    resolvePermission: (id, decision, payload) => permissionBroker.resolve(id, decision, payload),
     getConfig: cwd => configService.snapshot(cwd),
     writeConfig: async (cwd, modelConfig) => {
       const snapshot = await configService.writeConfig(cwd, modelConfig)

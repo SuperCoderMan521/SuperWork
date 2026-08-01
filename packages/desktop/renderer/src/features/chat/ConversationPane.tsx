@@ -27,6 +27,7 @@ type ConversationPaneProps = {
   onResolvePermission?: (
     permissionId: string,
     decision: PermissionDecision,
+    payload?: unknown,
   ) => void
   error?: string | null
   onDismissError?: () => void
@@ -415,8 +416,8 @@ export function ConversationPane({
       {session.permissionOrder[0] && onResolvePermission ? (
         <PermissionPanel
           request={session.permissions[session.permissionOrder[0]]!}
-          onResolve={decision =>
-            onResolvePermission(session.permissionOrder[0]!, decision)
+          onResolve={(decision, payload) =>
+            onResolvePermission(session.permissionOrder[0]!, decision, payload)
           }
         />
       ) : null}

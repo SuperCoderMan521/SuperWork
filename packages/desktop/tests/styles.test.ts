@@ -66,15 +66,16 @@ describe('desktop styles', () => {
 
   test('contains long permission summaries without widening the panel', () => {
     const panelRule = css.match(/\.permission-panel\s*\{[^}]+\}/)?.[0] ?? ''
-    const contentRule = css.match(/\.permission-panel > div:first-child\s*\{[^}]+\}/)?.[0] ?? ''
-    const summaryRule = css.match(/\.permission-panel p\s*\{[^}]+\}/)?.[0] ?? ''
+    const headerRule = css.match(/\.permission-header\s*\{[^}]+\}/)?.[0] ?? ''
+    const summaryRule = css.match(/\.permission-summary\s*\{[^}]+\}/)?.[0] ?? ''
+    const summaryPRule = css.match(/\.permission-summary p\s*\{[^}]+\}/)?.[0] ?? ''
 
     expect(panelRule).toContain('min-width: 0')
-    expect(contentRule).toContain('min-width: 0')
+    expect(headerRule).toContain('min-width: 0')
     expect(summaryRule).toContain('max-height:')
-    expect(summaryRule).toContain('overflow: auto')
-    expect(summaryRule).toContain('white-space: pre-wrap')
-    expect(summaryRule).toContain('word-break: break-all')
+    expect(summaryRule).toContain('overflow: hidden')
+    expect(summaryPRule).toContain('white-space: pre-wrap')
+    expect(summaryPRule).toContain('word-break: break-all')
   })
 
   test('styles local artifact cards and right workspace preview', () => {

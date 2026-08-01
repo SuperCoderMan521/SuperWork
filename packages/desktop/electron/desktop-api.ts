@@ -21,7 +21,7 @@ export type DesktopApi = {
   deleteSession(sessionId: string): void
   submitPrompt(sessionId: string, text: string): void
   interruptGeneration(sessionId: string): void
-  resolvePermission(id: string, decision: PermissionDecision): void
+  resolvePermission(id: string, decision: PermissionDecision, payload?: unknown): void
   setModel(sessionId: string, model: string): void
   setMode(sessionId: string, mode: PermissionMode): void
   getConfig(cwd: string): void
@@ -96,12 +96,13 @@ export function createDesktopApi(
         requestId: request(),
         sessionId,
       }),
-    resolvePermission: (permissionId, decision) =>
+    resolvePermission: (permissionId, decision, payload) =>
       send({
         type: 'permission.resolve',
         requestId: request(),
         permissionId,
         decision,
+        ...(payload !== undefined ? { payload } : {}),
       }),
     setModel: (sessionId, model) =>
       send({ type: 'model.set', requestId: request(), sessionId, model }),

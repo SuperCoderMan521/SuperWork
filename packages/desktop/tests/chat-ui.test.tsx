@@ -328,7 +328,6 @@ describe('desktop chat UI', () => {
       />,
     )
 
-    expect(html).toContain('Local Artifact')
     expect(html).toContain('html 片段')
     expect(html).toContain('预览')
   })

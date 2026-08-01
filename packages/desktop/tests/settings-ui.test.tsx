@@ -69,7 +69,7 @@ describe('SessionSettings', () => {
 })
 
 describe('ConfigCenter', () => {
-  test('renders as an in-app page with back and left refresh controls', () => {
+  test('renders as an in-app page with back control', () => {
     const html = renderToStaticMarkup(
       <ConfigCenter
         selectedTitle="Analyze API"
@@ -87,7 +87,6 @@ describe('ConfigCenter', () => {
         onModeChange={() => {}}
         onModelConfigChange={() => {}}
         onTestModelConfig={() => {}}
-        onRefresh={() => {}}
         onReadMemory={() => {}}
         onCreateMemory={() => {}}
         onSaveMemory={() => {}}
@@ -98,7 +97,6 @@ describe('ConfigCenter', () => {
 
     expect(html).toContain('settings-page')
     expect(html).toContain('aria-label="返回主对话"')
-    expect(html).toContain('aria-label="刷新配置"')
     expect(html).toContain('filesystem')
   })
 
@@ -124,7 +122,6 @@ describe('ConfigCenter', () => {
         onModeChange={() => {}}
         onModelConfigChange={() => {}}
         onTestModelConfig={() => {}}
-        onRefresh={() => {}}
         onReadMemory={() => {}}
         onCreateMemory={() => {}}
         onSaveMemory={() => {}}

@@ -23,6 +23,90 @@ export function toCorePermissionDecision(
   }
 }
 
+// Tool name emitted by the model for the interactive multiple-choice tool.
+// Kept as a local constant to avoid pulling the builtin-tools package into
+// the desktop core bundle (the engine loads it lazily on its own).
+const ASK_USER_QUESTION_TOOL_NAME = 'AskUserQuestion'
+
+type AskUserQuestionPayload = {
+  answers: Record<string, string>
+  annotations?: Record<string, { preview?: string; notes?: string }>
+}
+
+/** Validates the payload sent back by the AskUserQuestion approval panel. */
+export function parseAskUserQuestionPayload(
+  payload: unknown,
+): AskUserQuestionPayload | undefined {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return undefined
+  }
+  const record = payload as Record<string, unknown>
+  const rawAnswers = record.answers
+  if (!rawAnswers || typeof rawAnswers !== 'object' || Array.isArray(rawAnswers)) {
+    return undefined
+  }
+  const answers: Record<string, string> = {}
+  for (const [question, answer] of Object.entries(rawAnswers)) {
+    if (typeof answer === 'string' && answer.length > 0) {
+      answers[question] = answer
+    }
+  }
+  if (Object.keys(answers).length === 0) return undefined
+
+  let annotations: AskUserQuestionPayload['annotations']
+  const rawAnnotations = record.annotations
+  if (rawAnnotations && typeof rawAnnotations === 'object' && !Array.isArray(rawAnnotations)) {
+    annotations = {}
+    for (const [question, note] of Object.entries(rawAnnotations)) {
+      if (!note || typeof note !== 'object' || Array.isArray(note)) continue
+      const { preview, notes } = note as Record<string, unknown>
+      const entry: { preview?: string; notes?: string } = {}
+      if (typeof preview === 'string' && preview) entry.preview = preview
+      if (typeof notes === 'string' && notes) entry.notes = notes
+      if (entry.preview || entry.notes) annotations[question] = entry
+    }
+    if (Object.keys(annotations).length === 0) annotations = undefined
+  }
+
+  return { answers, ...(annotations ? { annotations } : {}) }
+}
+
+/**
+ * Merges an interactive approval payload back into the tool input, mirroring
+ * what the TUI injects via updatedInput. Unknown tools pass through untouched.
+ */
+export function mergeInteractivePayload(
+  toolName: string,
+  input: Record<string, unknown>,
+  payload: unknown,
+): Record<string, unknown> {
+  if (toolName !== ASK_USER_QUESTION_TOOL_NAME) return input
+  const parsed = parseAskUserQuestionPayload(payload)
+  if (!parsed) return input
+  return {
+    ...input,
+    answers: parsed.answers,
+    ...(parsed.annotations ? { annotations: parsed.annotations } : {}),
+  }
+}
+
+/** Human-readable summary for the AskUserQuestion permission request. */
+function askUserQuestionSummary(input: Record<string, unknown>): string {
+  const questions = input.questions
+  if (Array.isArray(questions) && questions.length > 0) {
+    const first = questions[0]
+    if (first && typeof first === 'object') {
+      const text = (first as Record<string, unknown>).question
+      if (typeof text === 'string' && text.trim()) {
+        const oneLine = text.replace(/\s+/g, ' ').trim()
+        const suffix = questions.length > 1 ? `（共 ${questions.length} 问）` : ''
+        return `${oneLine}${suffix}`
+      }
+    }
+  }
+  return 'Answer questions?'
+}
+
 type EngineState = {
   engine: QueryEngine
   appState: AppState
@@ -68,13 +152,22 @@ export function createDesktopCanUseTool({
     )
     if (pipelineDecision.behavior !== 'ask') return pipelineDecision
 
-    const decision = await permissionBroker.request({
+    // Tools requiring real user interaction (AskUserQuestion, ExitPlanMode…)
+    // must not offer "allow for session": auto-allowing future calls would
+    // execute them with empty interactive data (e.g. blank answers).
+    const interactive = tool.requiresUserInteraction?.() === true
+    const summary =
+      tool.name === ASK_USER_QUESTION_TOOL_NAME
+        ? askUserQuestionSummary(toolInput)
+        : (pipelineDecision.message ?? tool.name)
+
+    const { decision, payload } = await permissionBroker.request({
       sessionId,
       toolCallId: toolUseId,
       toolName: tool.name,
-      summary: pipelineDecision.message ?? tool.name,
+      summary,
       input: toolInput,
-      allowSession: true,
+      allowSession: !interactive,
     })
     if (decision === 'allow_session') {
       const existing =
@@ -92,7 +185,8 @@ export function createDesktopCanUseTool({
         }))
       }
     }
-    return toCorePermissionDecision(decision, toolInput)
+    const effectiveInput = mergeInteractivePayload(tool.name, toolInput, payload)
+    return toCorePermissionDecision(decision, effectiveInput)
   }
 }
 

@@ -334,6 +334,46 @@ describe('DesktopCommandDispatcher', () => {
     expect(events).toEqual([])
   })
 
+  test('forwards interactive payloads with permission resolutions', async () => {
+    const resolved: Array<{
+      id: string
+      decision: string
+      payload?: unknown
+    }> = []
+    const dispatcher = new DesktopCommandDispatcher({
+      controller: {
+        createSession: () => { throw new Error('not used') },
+        submitPrompt: async () => {},
+        interrupt: () => false,
+        setModel: () => {},
+        setMode: () => {},
+      },
+      listSessions: async () => [],
+      resolvePermission: (id, decision, payload) => {
+        resolved.push({ id, decision, payload })
+        return true
+      },
+      emit: () => {},
+      shutdown: async () => {},
+    })
+
+    await dispatcher.dispatch({
+      type: 'permission.resolve',
+      requestId: 'request-permission',
+      permissionId: 'permission-1',
+      decision: 'allow_once',
+      payload: { answers: { 'Which library?': 'date-fns' } },
+    })
+
+    expect(resolved).toEqual([
+      {
+        id: 'permission-1',
+        decision: 'allow_once',
+        payload: { answers: { 'Which library?': 'date-fns' } },
+      },
+    ])
+  })
+
   test('writes files through the desktop configuration service boundary', async () => {
     const events: DesktopEvent[] = []
     const dispatcher = new DesktopCommandDispatcher({

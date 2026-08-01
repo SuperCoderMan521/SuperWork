@@ -7,7 +7,9 @@ import { getDefaultAppState } from 'src/state/AppStateStore.js'
 import {
   createDesktopCanUseTool,
   desktopSlashFallback,
+  mergeInteractivePayload,
   nextResultWithTimeout,
+  parseAskUserQuestionPayload,
   subscribeInterrupt,
   toCorePermissionDecision,
 } from '../core/desktop-query-runner.js'
@@ -210,5 +212,214 @@ describe('createDesktopCanUseTool', () => {
     expect(appState.toolPermissionContext.alwaysAllowRules.session).toEqual([
       'Read',
     ])
+  })
+
+  test('does not offer allow_session for tools requiring user interaction', async () => {
+    const appState = getDefaultAppState()
+    appState.toolPermissionContext = getEmptyToolPermissionContext()
+    const decisionsSeen: string[][] = []
+    const broker = new PermissionBroker({
+      createId: () => 'permission-ask',
+      emit: request => {
+        decisionsSeen.push(request.decisions)
+        queueMicrotask(() => broker.resolve(request.id, 'allow_once'))
+      },
+    })
+    const checkPermissions: CanUseToolFn = async () => ({
+      behavior: 'ask',
+      message: 'Answer questions?',
+    })
+    const canUseTool = createDesktopCanUseTool({
+      sessionId: 'session-1',
+      appState,
+      permissionBroker: broker,
+      checkPermissions,
+    })
+
+    await canUseTool(
+      {
+        name: 'AskUserQuestion',
+        requiresUserInteraction: () => true,
+        inputSchema: { parse: (input: Record<string, unknown>) => input },
+      } as never,
+      { questions: [] },
+      {
+        getAppState: () => appState,
+        setAppState: (updater: (prev: AppState) => AppState) =>
+          Object.assign(appState, updater(appState)),
+      } as never,
+      {} as never,
+      'tool-ask',
+    )
+
+    expect(decisionsSeen).toEqual([['deny', 'allow_once']])
+    expect(
+      appState.toolPermissionContext.alwaysAllowRules.session ?? [],
+    ).toEqual([])
+  })
+
+  test('merges AskUserQuestion answers from the approval payload into updatedInput', async () => {
+    const appState = getDefaultAppState()
+    appState.toolPermissionContext = getEmptyToolPermissionContext()
+    const input = {
+      questions: [
+        {
+          question: 'Which library should we use?',
+          header: 'Library',
+          options: [
+            { label: 'date-fns', description: 'Lightweight' },
+            { label: 'dayjs', description: 'Moment-compatible' },
+          ],
+          multiSelect: false,
+        },
+      ],
+    }
+    const broker = new PermissionBroker({
+      createId: () => 'permission-ask',
+      emit: request => {
+        queueMicrotask(() =>
+          broker.resolve(request.id, 'allow_once', {
+            answers: { 'Which library should we use?': 'date-fns' },
+            annotations: {
+              'Which library should we use?': { notes: 'smaller bundle' },
+            },
+          }),
+        )
+      },
+    })
+    const checkPermissions: CanUseToolFn = async () => ({
+      behavior: 'ask',
+      message: 'Answer questions?',
+    })
+    const canUseTool = createDesktopCanUseTool({
+      sessionId: 'session-1',
+      appState,
+      permissionBroker: broker,
+      checkPermissions,
+    })
+
+    const result = await canUseTool(
+      {
+        name: 'AskUserQuestion',
+        requiresUserInteraction: () => true,
+        inputSchema: { parse: (value: Record<string, unknown>) => value },
+      } as never,
+      input,
+      {
+        getAppState: () => appState,
+        setAppState: (updater: (prev: AppState) => AppState) =>
+          Object.assign(appState, updater(appState)),
+      } as never,
+      {} as never,
+      'tool-ask',
+    )
+
+    expect(result.behavior).toBe('allow')
+    if (result.behavior !== 'allow') throw new Error('unreachable')
+    expect(result.updatedInput).toEqual({
+      ...input,
+      answers: { 'Which library should we use?': 'date-fns' },
+      annotations: {
+        'Which library should we use?': { notes: 'smaller bundle' },
+      },
+    })
+  })
+
+  test('keeps the original input when AskUserQuestion is allowed without a payload', async () => {
+    const appState = getDefaultAppState()
+    appState.toolPermissionContext = getEmptyToolPermissionContext()
+    const input = { questions: [{ question: 'Proceed?' }] }
+    const broker = new PermissionBroker({
+      createId: () => 'permission-ask',
+      emit: request => {
+        queueMicrotask(() => broker.resolve(request.id, 'allow_once'))
+      },
+    })
+    const checkPermissions: CanUseToolFn = async () => ({
+      behavior: 'ask',
+      message: 'Answer questions?',
+    })
+    const canUseTool = createDesktopCanUseTool({
+      sessionId: 'session-1',
+      appState,
+      permissionBroker: broker,
+      checkPermissions,
+    })
+
+    const result = await canUseTool(
+      {
+        name: 'AskUserQuestion',
+        requiresUserInteraction: () => true,
+        inputSchema: { parse: (value: Record<string, unknown>) => value },
+      } as never,
+      input,
+      {
+        getAppState: () => appState,
+        setAppState: (updater: (prev: AppState) => AppState) =>
+          Object.assign(appState, updater(appState)),
+      } as never,
+      {} as never,
+      'tool-ask',
+    )
+
+    expect(result.behavior).toBe('allow')
+    if (result.behavior !== 'allow') throw new Error('unreachable')
+    expect(result.updatedInput).toEqual(input)
+  })
+})
+
+describe('parseAskUserQuestionPayload', () => {
+  test('parses valid answers and annotations', () => {
+    expect(
+      parseAskUserQuestionPayload({
+        answers: { Q1: 'A', Q2: 'B, C' },
+        annotations: { Q1: { preview: 'p', notes: 'n' } },
+      }),
+    ).toEqual({
+      answers: { Q1: 'A', Q2: 'B, C' },
+      annotations: { Q1: { preview: 'p', notes: 'n' } },
+    })
+  })
+
+  test('rejects payloads without usable answers', () => {
+    expect(parseAskUserQuestionPayload(undefined)).toBeUndefined()
+    expect(parseAskUserQuestionPayload(null)).toBeUndefined()
+    expect(parseAskUserQuestionPayload({})).toBeUndefined()
+    expect(parseAskUserQuestionPayload({ answers: 'nope' })).toBeUndefined()
+    expect(parseAskUserQuestionPayload({ answers: {} })).toBeUndefined()
+    expect(
+      parseAskUserQuestionPayload({ answers: { Q1: 42 } }),
+    ).toBeUndefined()
+  })
+
+  test('drops empty annotations', () => {
+    expect(
+      parseAskUserQuestionPayload({ answers: { Q1: 'A' }, annotations: {} }),
+    ).toEqual({ answers: { Q1: 'A' } })
+  })
+})
+
+describe('mergeInteractivePayload', () => {
+  test('passes through unknown tools untouched', () => {
+    const input = { command: 'ls' }
+    expect(
+      mergeInteractivePayload('Bash', input, { answers: { Q: 'A' } }),
+    ).toBe(input)
+  })
+
+  test('injects answers for AskUserQuestion', () => {
+    const input = { questions: [{ question: 'Q1' }] }
+    expect(
+      mergeInteractivePayload('AskUserQuestion', input, {
+        answers: { Q1: 'A' },
+      }),
+    ).toEqual({ questions: [{ question: 'Q1' }], answers: { Q1: 'A' } })
+  })
+
+  test('ignores malformed payloads', () => {
+    const input = { questions: [{ question: 'Q1' }] }
+    expect(
+      mergeInteractivePayload('AskUserQuestion', input, { answers: {} }),
+    ).toBe(input)
   })
 })

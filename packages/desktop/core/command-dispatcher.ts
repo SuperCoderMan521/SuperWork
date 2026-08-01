@@ -29,7 +29,7 @@ type CommandDispatcherOptions = {
   resumeSession?: (sessionId: string) => Promise<void>
   deleteSession?: (sessionId: string) => Promise<void>
   emitSnapshot?: (sessionId: string) => void
-  resolvePermission: (id: string, decision: PermissionDecision) => boolean
+  resolvePermission: (id: string, decision: PermissionDecision, payload?: unknown) => boolean
   getConfig?: (cwd: string) => Promise<DesktopConfigSnapshot>
   writeConfig?: (cwd: string, modelConfig: DesktopModelConfig) => Promise<DesktopConfigSnapshot>
   testConfig?: (modelConfig: DesktopModelConfig, cwd: string) => Promise<DesktopModelConnectionResult>
@@ -120,7 +120,7 @@ export class DesktopCommandDispatcher {
         }
         return
       case 'permission.resolve':
-        if (!this.options.resolvePermission(command.permissionId, command.decision)) {
+        if (!this.options.resolvePermission(command.permissionId, command.decision, command.payload)) {
           return
         }
         return

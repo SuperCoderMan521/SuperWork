@@ -48,7 +48,6 @@ export function ConfigCenter({
   onModeChange,
   onModelConfigChange,
   onTestModelConfig,
-  onRefresh,
   onReadMemory,
   onCreateMemory,
   onSaveMemory,
@@ -70,7 +69,6 @@ export function ConfigCenter({
   onModeChange: (mode: PermissionMode) => void
   onModelConfigChange: (config: DesktopModelConfig) => void
   onTestModelConfig: (config: DesktopModelConfig) => void
-  onRefresh: () => void
   onReadMemory: (path: string) => void
   onCreateMemory: (path: string) => void
   onSaveMemory: (path: string, content: string) => void
@@ -106,15 +104,6 @@ export function ConfigCenter({
           <h2>Claude Code 配置</h2>
           <p>{selectedTitle ?? '请选择一个会话'}</p>
         </div>
-        <button
-          className="refresh-icon"
-          type="button"
-          aria-label="刷新配置"
-          onClick={onRefresh}
-          disabled={!cwd}
-        >
-          ↻
-        </button>
         <nav className="settings-tabs" aria-label="配置分类">
           {[
             ['model', '模型'],

@@ -156,6 +156,14 @@ async function main(): Promise<void> {
       controller?.restoreSession(snapshot)
     },
     deleteSession: async sessionId => {
+      const killedTeammates = queryRunner.cleanupSession(sessionId)
+      if (killedTeammates > 0) {
+        logCore(
+          'info',
+          `session.delete cleaned in-process teammates session=${sessionId} count=${killedTeammates}`,
+        )
+      }
+      permissionBroker.cancelSession(sessionId)
       controller?.deleteSession(sessionId)
       const transcriptPath = sessionService.transcriptPathForDelete(
         sessionId,

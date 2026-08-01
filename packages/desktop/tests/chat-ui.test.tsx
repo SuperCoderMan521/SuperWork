@@ -1089,6 +1089,50 @@ describe('desktop chat UI', () => {
     expect(html).toContain('正在执行')
   })
 
+  test('promotes mailbox task assignments into the task execution list', () => {
+    const activity = buildAgentActivity({
+      team: {
+        id: 'team',
+        name: 'TeamCreate',
+        state: 'success',
+        summary: 'user-system',
+        input: { team_name: 'user-system' },
+      },
+    }, ['team'], {
+      generatedAt: 100,
+      teams: [{
+        name: 'user-system',
+        inboxes: [{
+          agentName: 'backend',
+          messages: [{
+            from: 'team-lead',
+            text: JSON.stringify({
+              type: 'task_assignment',
+              taskId: 'backend-setup',
+              subject: '实现后端 API',
+              description: 'Node.js + Express + SQLite',
+            }),
+            timestamp: '2026-08-01T00:00:00.000Z',
+            read: false,
+            summary: '实现后端 API',
+          }],
+        }],
+      }],
+    })
+
+    expect(activity.tasks).toEqual([{
+      id: 'backend-setup',
+      subject: '实现后端 API',
+      description: 'Node.js + Express + SQLite',
+      status: 'in_progress',
+      owner: 'backend',
+      updatedAt: Date.parse('2026-08-01T00:00:00.000Z'),
+    }])
+    expect(activity.agents.find(agent => agent.name === 'backend')?.currentTasks).toEqual([
+      '实现后端 API',
+    ])
+  })
+
   test('does not show historical mailbox agents when the current session has no agent context', () => {
     const activity = buildAgentActivity({}, [], {
       generatedAt: 100,

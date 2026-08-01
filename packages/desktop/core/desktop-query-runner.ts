@@ -6,6 +6,7 @@ import type { Command } from 'src/types/command.js'
 import type { PermissionDecision as CorePermissionDecision } from 'src/types/permissions.js'
 import type { Message } from 'src/types/message.js'
 import { hasPermissionsToUseTool } from 'src/utils/permissions/permissions.js'
+import { killInProcessTeammate } from 'src/utils/swarm/spawnInProcess.js'
 import type { PermissionDecision } from '../shared/protocol.js'
 import type { QueryRunInput } from './conversation-controller.js'
 import { PermissionBroker } from './permission-broker.js'
@@ -117,6 +118,27 @@ type EngineState = {
   commands: Command[]
   teammateMirroredMessageKeys: Set<string>
   teammateMirroredStatuses: Map<string, string>
+}
+
+type KillTeammateFn = (
+  taskId: string,
+  setAppState: (updater: (prev: AppState) => AppState) => void,
+) => boolean
+
+export function cleanupInProcessTeammatesForSession(
+  sessionId: string,
+  appState: AppState,
+  setAppState: (updater: (prev: AppState) => AppState) => void,
+  killTeammate: KillTeammateFn = killInProcessTeammate,
+): number {
+  let killed = 0
+  for (const [taskId, task] of Object.entries(appState.tasks)) {
+    if (!isInProcessTeammateTask(task)) continue
+    if (task.identity.parentSessionId !== sessionId) continue
+    if (task.status !== 'running') continue
+    if (killTeammate(taskId, setAppState)) killed += 1
+  }
+  return killed
 }
 
 export type DesktopSessionBootstrap = {
@@ -410,6 +432,19 @@ export class DesktopQueryRunner {
     private readonly permissionBroker: PermissionBroker,
     private readonly loadInitialMessages: (sessionId: string) => unknown[] = () => [],
   ) {}
+
+  cleanupSession(sessionId: string): number {
+    const state = this.engines.get(sessionId)
+    if (!state) return 0
+    state.engine.interrupt()
+    const killed = cleanupInProcessTeammatesForSession(
+      sessionId,
+      state.appState,
+      updater => Object.assign(state.appState, updater(state.appState)),
+    )
+    this.engines.delete(sessionId)
+    return killed
+  }
 
   async *run(input: QueryRunInput): AsyncGenerator<unknown> {
     console.error(`[desktop-core] query.start session=${input.session.id}`)

@@ -5,6 +5,7 @@ import { getEmptyToolPermissionContext } from 'src/Tool.js'
 import type { AppState } from 'src/state/AppStateStore.js'
 import { getDefaultAppState } from 'src/state/AppStateStore.js'
 import {
+  cleanupInProcessTeammatesForSession,
   createDesktopCanUseTool,
   createDesktopLeaderPermissionHandler,
   desktopSlashFallback,
@@ -76,6 +77,103 @@ describe('desktopSlashFallback', () => {
     ])
 
     expect(markdown).toBeNull()
+  })
+})
+
+describe('cleanupInProcessTeammatesForSession', () => {
+  test('kills only running in-process teammates owned by the deleted session', () => {
+    const appState = getDefaultAppState()
+    appState.tasks = {
+      owned: {
+        id: 'owned',
+        type: 'in_process_teammate',
+        status: 'running',
+        description: 'owned teammate',
+        startTime: 1,
+        outputFile: '',
+        outputOffset: 0,
+        notified: false,
+        identity: {
+          agentId: 'worker@alpha',
+          agentName: 'worker',
+          teamName: 'alpha',
+          planModeRequired: false,
+          parentSessionId: 'session-1',
+        },
+        prompt: 'work',
+        awaitingPlanApproval: false,
+        permissionMode: 'default',
+        pendingUserMessages: [],
+        isIdle: false,
+        shutdownRequested: false,
+        lastReportedToolCount: 0,
+        lastReportedTokenCount: 0,
+      },
+      otherSession: {
+        id: 'otherSession',
+        type: 'in_process_teammate',
+        status: 'running',
+        description: 'other teammate',
+        startTime: 1,
+        outputFile: '',
+        outputOffset: 0,
+        notified: false,
+        identity: {
+          agentId: 'other@beta',
+          agentName: 'other',
+          teamName: 'beta',
+          planModeRequired: false,
+          parentSessionId: 'session-2',
+        },
+        prompt: 'work',
+        awaitingPlanApproval: false,
+        permissionMode: 'default',
+        pendingUserMessages: [],
+        isIdle: false,
+        shutdownRequested: false,
+        lastReportedToolCount: 0,
+        lastReportedTokenCount: 0,
+      },
+      completed: {
+        id: 'completed',
+        type: 'in_process_teammate',
+        status: 'completed',
+        description: 'done teammate',
+        startTime: 1,
+        outputFile: '',
+        outputOffset: 0,
+        notified: false,
+        identity: {
+          agentId: 'done@alpha',
+          agentName: 'done',
+          teamName: 'alpha',
+          planModeRequired: false,
+          parentSessionId: 'session-1',
+        },
+        prompt: 'work',
+        awaitingPlanApproval: false,
+        permissionMode: 'default',
+        pendingUserMessages: [],
+        isIdle: true,
+        shutdownRequested: false,
+        lastReportedToolCount: 0,
+        lastReportedTokenCount: 0,
+      },
+    } as AppState['tasks']
+    const killed: string[] = []
+
+    const count = cleanupInProcessTeammatesForSession(
+      'session-1',
+      appState,
+      updater => Object.assign(appState, updater(appState)),
+      taskId => {
+        killed.push(taskId)
+        return true
+      },
+    )
+
+    expect(count).toBe(1)
+    expect(killed).toEqual(['owned'])
   })
 })
 

@@ -357,6 +357,7 @@ export function buildAgentActivity(
             ? `分配任务：${stringField(parsed, 'subject') ?? stringField(parsed, 'taskId') ?? mailboxMessage.summary ?? '未命名任务'}`
             : mailboxMessage.text
           const sender = mailboxMessage.from
+          const timestamp = Date.parse(mailboxMessage.timestamp) || undefined
           if (sender !== 'team-lead' && !agents.has(sender)) {
             agents.set(sender, {
               name: sender,
@@ -367,12 +368,37 @@ export function buildAgentActivity(
               files: [],
             })
           }
+          if (isAssignment && recipient !== 'team-lead') {
+            const taskId =
+              stringField(parsed, 'taskId') ??
+              stringField(parsed, 'task_id') ??
+              `${team.name}:${recipient}:${messages.length}`
+            const subject =
+              stringField(parsed, 'subject') ??
+              mailboxMessage.summary ??
+              taskId
+            tasks.set(taskId, {
+              id: taskId,
+              subject,
+              description: stringField(parsed, 'description'),
+              status: 'in_progress',
+              owner: recipient,
+              updatedAt: timestamp,
+            })
+            const agent = agents.get(recipient)
+            if (agent) {
+              agents.set(recipient, {
+                ...agent,
+                status: agent.status === 'failed' ? 'failed' : 'running',
+              })
+            }
+          }
           messages.push({
             from: sender,
             to: recipient,
             text,
             summary: mailboxMessage.summary,
-            timestamp: Date.parse(mailboxMessage.timestamp) || undefined,
+            timestamp,
             kind: isAssignment ? 'assignment' : protocolType ? 'system' : 'message',
           })
         }

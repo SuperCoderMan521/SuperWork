@@ -8,6 +8,9 @@ import { hasPermissionsToUseTool } from 'src/utils/permissions/permissions.js'
 import type { PermissionDecision } from '../shared/protocol.js'
 import type { QueryRunInput } from './conversation-controller.js'
 import { PermissionBroker } from './permission-broker.js'
+import type {
+  LeaderPermissionHandler,
+} from 'src/utils/swarm/leaderPermissionBridge.js'
 
 export function toCorePermissionDecision(
   decision: PermissionDecision,
@@ -168,6 +171,7 @@ export function createDesktopCanUseTool({
       summary,
       input: toolInput,
       allowSession: !interactive,
+      permissionSuggestions: pipelineDecision.suggestions,
     })
     if (decision === 'allow_session') {
       const existing =
@@ -187,6 +191,50 @@ export function createDesktopCanUseTool({
     }
     const effectiveInput = mergeInteractivePayload(tool.name, toolInput, payload)
     return toCorePermissionDecision(decision, effectiveInput)
+  }
+}
+
+export function createDesktopLeaderPermissionHandler({
+  permissionBroker,
+}: {
+  permissionBroker: PermissionBroker
+}): LeaderPermissionHandler {
+  return async request => {
+    const interactive = request.tool.requiresUserInteraction?.() === true
+    const { decision, payload } = await permissionBroker.request({
+      sessionId: request.identity.parentSessionId,
+      toolCallId: request.toolUseID,
+      toolName: request.tool.name,
+      summary: request.description || request.permissionResult.message || request.tool.name,
+      input: request.input,
+      allowSession: !interactive,
+      agentId: request.identity.agentId,
+      agentName: request.identity.agentName,
+      teamName: request.identity.teamName,
+      permissionSuggestions: request.permissionResult.suggestions,
+    })
+
+    if (decision === 'allow_session') {
+      const state = request.toolUseContext.getAppState()
+      const existing = state.toolPermissionContext.alwaysAllowRules.session ?? []
+      if (!existing.includes(request.tool.name)) {
+        request.toolUseContext.setAppState(prev => ({
+          ...prev,
+          toolPermissionContext: {
+            ...prev.toolPermissionContext,
+            alwaysAllowRules: {
+              ...prev.toolPermissionContext.alwaysAllowRules,
+              session: [...existing, request.tool.name],
+            },
+          },
+        }))
+      }
+    }
+
+    return toCorePermissionDecision(
+      decision,
+      mergeInteractivePayload(request.tool.name, request.input, payload),
+    )
   }
 }
 

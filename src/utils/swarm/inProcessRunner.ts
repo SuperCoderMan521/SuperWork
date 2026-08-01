@@ -109,6 +109,7 @@ import { unregisterAgent as unregisterPerfettoAgent } from '../telemetry/perfett
 import { createContentReplacementState } from '../toolResultStorage.js'
 import { TEAM_LEAD_NAME } from './constants.js'
 import {
+  getLeaderPermissionHandler,
   getLeaderSetToolPermissionContext,
   getLeaderToolUseConfirmQueue,
 } from './leaderPermissionBridge.js'
@@ -339,6 +340,20 @@ function createInProcessCanUseTool(
             },
           },
         ])
+      })
+    }
+
+    const leaderPermissionHandler = getLeaderPermissionHandler()
+    if (leaderPermissionHandler) {
+      return leaderPermissionHandler({
+        identity,
+        tool: tool as Tool,
+        input,
+        toolUseContext,
+        assistantMessage,
+        toolUseID,
+        permissionResult: result,
+        description,
       })
     }
 

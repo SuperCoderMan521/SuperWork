@@ -23,6 +23,11 @@ export const PermissionDecisionSchema = z.enum([
   'allow_session',
 ])
 
+const PermissionSuggestionSchema = z.object({
+  type: z.string().min(1),
+  destination: z.string().min(1).optional(),
+}).passthrough()
+
 export const DesktopErrorSchema = z.object({
   code: z.enum([
     'INVALID_COMMAND',
@@ -124,6 +129,10 @@ export const DesktopPermissionRequestSchema = z.object({
   summary: z.string(),
   input: z.unknown(),
   decisions: z.array(PermissionDecisionSchema).min(1),
+  agentId: z.string().min(1).optional(),
+  agentName: z.string().min(1).optional(),
+  teamName: z.string().min(1).optional(),
+  permissionSuggestions: z.array(PermissionSuggestionSchema).optional(),
 })
 
 export const DesktopSessionSummarySchema = z.object({

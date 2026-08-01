@@ -3,7 +3,10 @@ import type { DesktopEvent } from '../shared/protocol.js'
 import { DesktopCommandDispatcher } from './command-dispatcher.js'
 import { DesktopConversationController } from './conversation-controller.js'
 import { DesktopConfigService } from './desktop-config-service.js'
-import { DesktopQueryRunner } from './desktop-query-runner.js'
+import {
+  createDesktopLeaderPermissionHandler,
+  DesktopQueryRunner,
+} from './desktop-query-runner.js'
 import { runCoreProtocol } from './entry.js'
 import { testModelConnection } from './model-connection-test.js'
 import { PermissionBroker } from './permission-broker.js'
@@ -13,6 +16,10 @@ import { DesktopPerformanceService } from './performance-service.js'
 import { DesktopAgentMailboxService } from './agent-mailbox-service.js'
 import { DesktopScheduledTasksService } from './scheduled-tasks-service.js'
 import { copyLegacyDesktopTranscripts } from './legacy-session-migration.js'
+import {
+  registerLeaderPermissionHandler,
+  unregisterLeaderPermissionHandler,
+} from 'src/utils/swarm/leaderPermissionBridge.js'
 
 /**
  * Writes a leveled log line to stderr so it never pollutes the JSON Lines
@@ -91,6 +98,9 @@ async function main(): Promise<void> {
     emit: (request, sessionId) =>
       controller?.emitPermissionRequest(sessionId, request),
   })
+  registerLeaderPermissionHandler(
+    createDesktopLeaderPermissionHandler({ permissionBroker }),
+  )
   const queryRunner = new DesktopQueryRunner(
     permissionBroker,
     sessionId => sessionService.rawMessages(sessionId),
@@ -170,6 +180,7 @@ async function main(): Promise<void> {
     compactMemory: (path, content) => configService.compactMemory(path, content),
     emit,
     shutdown: async () => {
+      unregisterLeaderPermissionHandler()
       permissionBroker.cancelAll()
       await storageModule.flushSessionStorage()
     },

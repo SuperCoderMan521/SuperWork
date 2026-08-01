@@ -40,6 +40,119 @@ type PermissionPanelProps = {
   onResolve: (decision: PermissionDecision, payload?: unknown) => void
 }
 
+type PermissionDetail = {
+  action: string
+  path?: string
+  previewLabel?: string
+  preview?: string
+  rawInput: string
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+  return value as Record<string, unknown>
+}
+
+function stringField(
+  input: Record<string, unknown>,
+  ...keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = input[key]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return undefined
+}
+
+function prettyInput(input: unknown): string {
+  try {
+    return JSON.stringify(input, null, 2)
+  } catch {
+    return String(input)
+  }
+}
+
+function permissionDetail(request: DesktopPermissionRequest): PermissionDetail {
+  const input = asRecord(request.input)
+  const rawInput = prettyInput(request.input)
+  if (!input) {
+    return { action: request.summary, rawInput }
+  }
+
+  switch (request.toolName) {
+    case 'Write':
+      return {
+        action: '写入文件',
+        path: stringField(input, 'file_path', 'path'),
+        previewLabel: '内容预览',
+        preview: stringField(input, 'content'),
+        rawInput,
+      }
+    case 'Edit':
+    case 'MultiEdit':
+      return {
+        action: '修改文件',
+        path: stringField(input, 'file_path', 'path'),
+        previewLabel: '变更预览',
+        preview:
+          stringField(input, 'new_string') ??
+          stringField(input, 'edits') ??
+          request.summary,
+        rawInput,
+      }
+    case 'Read':
+      return {
+        action: '读取文件',
+        path: stringField(input, 'file_path', 'path'),
+        rawInput,
+      }
+    case 'Bash':
+    case 'PowerShell':
+      return {
+        action: request.toolName === 'Bash' ? '执行 Shell 命令' : '执行 PowerShell 命令',
+        previewLabel: '命令',
+        preview: stringField(input, 'command'),
+        rawInput,
+      }
+    default:
+      return { action: request.summary, rawInput }
+  }
+}
+
+function permissionSuggestionLabel(suggestion: unknown): string | undefined {
+  const record = asRecord(suggestion)
+  if (!record) return undefined
+  if (
+    record.type === 'setMode' &&
+    record.mode === 'acceptEdits' &&
+    record.destination === 'session'
+  ) {
+    return '批准后，本会话自动接受文件编辑'
+  }
+  if (record.type === 'setMode' && typeof record.mode === 'string') {
+    return `批准后，将权限模式切换为 ${record.mode}`
+  }
+  if (record.type === 'addRules') {
+    return '批准后，将添加匹配的工具允许规则'
+  }
+  if (record.type === 'addDirectories') {
+    return '批准后，将添加工作目录权限'
+  }
+  return undefined
+}
+
+function permissionSuggestionLabels(
+  request: DesktopPermissionRequest,
+): string[] {
+  const suggestions = request.permissionSuggestions ?? []
+  const labels = suggestions
+    .map(permissionSuggestionLabel)
+    .filter((label): label is string => Boolean(label))
+  return [...new Set(labels)]
+}
+
 /**
  * Hookless dispatcher: interactive tools (AskUserQuestion) get a dedicated
  * dialog; everything else falls through to the generic allow/deny panel.
@@ -76,7 +189,7 @@ function GenericPermissionPanel({
 
   // Dynamic max-height for smooth expand/collapse animation.
   const [maxHeight, setMaxHeight] = useState<number>(COLLAPSED_HEIGHT)
-  const contentRef = useRef<HTMLParagraphElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     submittedRef.current = false
@@ -106,10 +219,19 @@ function GenericPermissionPanel({
     onResolve(decision)
   }
 
+  const detail = permissionDetail(request)
+  const suggestionLabels = permissionSuggestionLabels(request)
+
   return (
     <section className="permission-panel" aria-label="工具权限请求">
       <div className="permission-header">
         <strong>{request.toolName} 请求权限</strong>
+        {request.agentName ? (
+          <span className="permission-agent-source">
+            {request.agentName}
+            {request.teamName ? ` · ${request.teamName}` : ''}
+          </span>
+        ) : null}
         {overflowable ? (
           <button
             type="button"
@@ -148,7 +270,31 @@ function GenericPermissionPanel({
         data-overflowable={overflowable}
         style={{ maxHeight: `${maxHeight}px` }}
       >
-        <p ref={contentRef}>{request.summary}</p>
+        <div ref={contentRef} className="permission-detail">
+          <div className="permission-detail-main">
+            <span>{detail.action}</span>
+            {detail.path ? <code>{detail.path}</code> : null}
+          </div>
+          {detail.preview ? (
+            <div className="permission-preview">
+              <span>{detail.previewLabel ?? '预览'}</span>
+              <pre><code>{detail.preview}</code></pre>
+            </div>
+          ) : (
+            <p>{request.summary}</p>
+          )}
+          {suggestionLabels.length > 0 ? (
+            <div className="permission-suggestions">
+              {suggestionLabels.map(label => (
+                <span key={label}>{label}</span>
+              ))}
+            </div>
+          ) : null}
+          <details className="permission-raw-request">
+            <summary>查看原始请求</summary>
+            <pre><code>{detail.rawInput}</code></pre>
+          </details>
+        </div>
       </div>
 
       <form

@@ -49,6 +49,35 @@ describe('PermissionBroker', () => {
     })
   })
 
+  test('emits permission suggestions for the renderer', async () => {
+    let emitted: unknown
+    const broker = new PermissionBroker({
+      createId: () => 'permission-1',
+      emit: request => {
+        emitted = request
+      },
+    })
+
+    void broker.request({
+      sessionId: 'session-1',
+      toolCallId: 'tool-1',
+      toolName: 'Write',
+      summary: 'Write a file to the local filesystem.',
+      input: { file_path: 'K:\\ai\\12\\seckill-node\\package.json' },
+      allowSession: true,
+      permissionSuggestions: [
+        { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+      ],
+    })
+
+    expect(emitted).toMatchObject({
+      id: 'permission-1',
+      permissionSuggestions: [
+        { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+      ],
+    })
+  })
+
   test('rejects duplicate and unknown resolutions', async () => {
     const broker = new PermissionBroker({
       createId: () => 'permission-1',

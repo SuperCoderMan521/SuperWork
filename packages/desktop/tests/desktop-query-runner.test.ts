@@ -6,6 +6,7 @@ import type { AppState } from 'src/state/AppStateStore.js'
 import { getDefaultAppState } from 'src/state/AppStateStore.js'
 import {
   createDesktopCanUseTool,
+  createDesktopLeaderPermissionHandler,
   desktopSlashFallback,
   mergeInteractivePayload,
   nextResultWithTimeout,
@@ -365,6 +366,76 @@ describe('createDesktopCanUseTool', () => {
     expect(result.behavior).toBe('allow')
     if (result.behavior !== 'allow') throw new Error('unreachable')
     expect(result.updatedInput).toEqual(input)
+  })
+})
+
+describe('createDesktopLeaderPermissionHandler', () => {
+  test('routes an in-process worker approval through the parent desktop session', async () => {
+    const appState = getDefaultAppState()
+    appState.toolPermissionContext = getEmptyToolPermissionContext()
+    const emitted: Array<{
+      sessionId: string
+      agentName?: string
+      permissionSuggestions?: unknown
+    }> = []
+    const broker = new PermissionBroker({
+      createId: () => 'permission-worker',
+      emit: (request, sessionId) => {
+        emitted.push({
+          sessionId,
+          agentName: request.agentName,
+          permissionSuggestions: request.permissionSuggestions,
+        })
+        queueMicrotask(() => broker.resolve(request.id, 'allow_once'))
+      },
+    })
+    const handler = createDesktopLeaderPermissionHandler({
+      permissionBroker: broker,
+    })
+
+    const result = await handler({
+      identity: {
+        agentId: 'researcher@team-1',
+        agentName: 'researcher',
+        teamName: 'team-1',
+        parentSessionId: 'desktop-session-1',
+        planModeRequired: false,
+      },
+      tool: {
+        name: 'Bash',
+        inputSchema: { parse: (value: Record<string, unknown>) => value },
+      } as never,
+      input: { command: 'bun test' },
+      toolUseContext: {
+        getAppState: () => appState,
+        setAppState: (updater: (prev: AppState) => AppState) =>
+          Object.assign(appState, updater(appState)),
+      } as never,
+      assistantMessage: {} as never,
+      toolUseID: 'tool-worker-1',
+      permissionResult: {
+        behavior: 'ask',
+        message: 'Bash requires approval',
+        suggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+        ],
+      },
+      description: 'Run bun test',
+    })
+
+    expect(result).toEqual({
+      behavior: 'allow',
+      updatedInput: { command: 'bun test' },
+    })
+    expect(emitted).toEqual([
+      {
+        sessionId: 'desktop-session-1',
+        agentName: 'researcher',
+        permissionSuggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+        ],
+      },
+    ])
   })
 })
 

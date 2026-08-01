@@ -11,7 +11,10 @@
  */
 
 import type { ToolUseConfirm } from '../../components/permissions/PermissionRequest.js'
-import type { ToolPermissionContext } from '../../Tool.js'
+import type { Tool, ToolPermissionContext, ToolUseContext } from '../../Tool.js'
+import type { AssistantMessage } from '../../types/message.js'
+import type { PermissionDecision, PermissionAskDecision } from '../../types/permissions.js'
+import type { TeammateIdentity } from '../../tasks/InProcessTeammateTask/types.js'
 
 export type SetToolUseConfirmQueueFn = (
   updater: (prev: ToolUseConfirm[]) => ToolUseConfirm[],
@@ -24,6 +27,23 @@ export type SetToolPermissionContextFn = (
 
 let registeredSetter: SetToolUseConfirmQueueFn | null = null
 let registeredPermissionContextSetter: SetToolPermissionContextFn | null = null
+
+export type LeaderPermissionRequest = {
+  identity: TeammateIdentity
+  tool: Tool
+  input: Record<string, unknown>
+  toolUseContext: ToolUseContext
+  assistantMessage: AssistantMessage
+  toolUseID: string
+  permissionResult: PermissionAskDecision
+  description: string
+}
+
+export type LeaderPermissionHandler = (
+  request: LeaderPermissionRequest,
+) => Promise<PermissionDecision>
+
+let registeredPermissionHandler: LeaderPermissionHandler | null = null
 
 export function registerLeaderToolUseConfirmQueue(
   setter: SetToolUseConfirmQueueFn,
@@ -51,4 +71,18 @@ export function getLeaderSetToolPermissionContext(): SetToolPermissionContextFn 
 
 export function unregisterLeaderSetToolPermissionContext(): void {
   registeredPermissionContextSetter = null
+}
+
+export function registerLeaderPermissionHandler(
+  handler: LeaderPermissionHandler,
+): void {
+  registeredPermissionHandler = handler
+}
+
+export function getLeaderPermissionHandler(): LeaderPermissionHandler | null {
+  return registeredPermissionHandler
+}
+
+export function unregisterLeaderPermissionHandler(): void {
+  registeredPermissionHandler = null
 }

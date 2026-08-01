@@ -113,6 +113,37 @@ describe('DesktopEventSchema', () => {
     ).toBe(true)
   })
 
+  test('accepts worker attribution on permission requests', () => {
+    const result = DesktopEventSchema.safeParse({
+      type: 'permission.requested',
+      sessionId: 'session-1',
+      sequence: 1,
+      request: {
+        id: 'permission-1',
+        toolCallId: 'tool-1',
+        toolName: 'Bash',
+        summary: 'Run tests',
+        input: { command: 'bun test' },
+        decisions: ['deny', 'allow_once'],
+        agentId: 'researcher@alpha',
+        agentName: 'researcher',
+        teamName: 'alpha',
+        permissionSuggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+        ],
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(
+      result.success && result.data.type === 'permission.requested'
+        ? result.data.request.permissionSuggestions
+        : undefined,
+    ).toEqual([
+      { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+    ])
+  })
+
   test('rejects an unsupported protocol version', () => {
     expect(
       DesktopEventSchema.safeParse({

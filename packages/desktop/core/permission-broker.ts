@@ -4,6 +4,10 @@ import type {
   PermissionDecision,
 } from '../shared/protocol.js'
 
+type DesktopPermissionSuggestion = NonNullable<
+  DesktopPermissionRequest['permissionSuggestions']
+>[number]
+
 export type PermissionRequestInput = {
   sessionId: string
   toolCallId: string
@@ -11,6 +15,10 @@ export type PermissionRequestInput = {
   summary: string
   input: unknown
   allowSession: boolean
+  agentId?: string
+  agentName?: string
+  teamName?: string
+  permissionSuggestions?: unknown[]
 }
 
 /** The user's answer to a permission request, with optional interactive data. */
@@ -51,6 +59,9 @@ export class PermissionBroker {
     const decisions: PermissionDecision[] = input.allowSession
       ? ['deny', 'allow_once', 'allow_session']
       : ['deny', 'allow_once']
+    const permissionSuggestions = serializablePermissionSuggestions(
+      input.permissionSuggestions,
+    )
 
     return new Promise(resolve => {
       const timeout = setTimeout(() => this.resolve(id, 'deny'), this.timeoutMs)
@@ -63,6 +74,10 @@ export class PermissionBroker {
           summary: input.summary,
           input: input.input,
           decisions,
+          ...(input.agentId ? { agentId: input.agentId } : {}),
+          ...(input.agentName ? { agentName: input.agentName } : {}),
+          ...(input.teamName ? { teamName: input.teamName } : {}),
+          ...(permissionSuggestions.length ? { permissionSuggestions } : {}),
         },
         input.sessionId,
       )
@@ -93,4 +108,20 @@ export class PermissionBroker {
     for (const id of ids) this.resolve(id, 'deny')
     return ids.length
   }
+}
+
+function serializablePermissionSuggestions(
+  suggestions: unknown[] | undefined,
+): DesktopPermissionSuggestion[] {
+  if (!suggestions) return []
+  return suggestions.filter(
+    (suggestion): suggestion is DesktopPermissionSuggestion => {
+      return (
+        !!suggestion &&
+        typeof suggestion === 'object' &&
+        !Array.isArray(suggestion) &&
+        typeof (suggestion as Record<string, unknown>).type === 'string'
+      )
+    },
+  )
 }

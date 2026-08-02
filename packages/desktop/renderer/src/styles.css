@@ -33,6 +33,16 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .close-files:hover { color: #d8d9dc; background: #24262b; }
 .sidebar { display: flex; min-height: 0; height: 100%; flex-direction: column; padding: 18px 14px; overflow: hidden; background: #111214; border-right: 1px solid var(--border); }
 .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 16px 8px; }
+.sidebar-tabs { display: flex; gap: 0; padding: 4px; border-radius: 10px; background: #1a1b1e; margin: 0 4px 8px; }
+.sidebar-tabs button { flex: 1; padding: 6px 8px; background: transparent; border: 0; border-radius: 7px; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: background-color .15s ease, color .15s ease; }
+.sidebar-tabs button:hover { color: #d0d1d4; }
+.sidebar-tabs button[data-active="true"] { background: #2a2b30; color: #f1f2f4; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.sidebar-tabs .sidebar-tab-icon { font-size: 13px; line-height: 1; }
+.weixin-conversation { width: 100%; padding: 10px 12px; background: transparent; border: 0; border-left: 2px solid transparent; border-radius: 0; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; color: inherit; }
+.weixin-conversation:hover { background: #1a1b1e; }
+.weixin-conversation[data-active="true"] { background: #1a1b1e; border-left-color: #d77757; }
+.weixin-conversation strong { font-size: 12px; color: #f1f2f4; font-weight: 600; }
+.weixin-conversation span { font-size: 11px; color: var(--muted); }
 .brand { font-size: 17px; font-weight: 720; letter-spacing: 0; }
 .icon-button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid transparent; border-radius: 8px; color: var(--icon); background: transparent; font-size: 15px; }
 .icon-button:hover { border-color: var(--border); color: #d0d1d4; background: var(--surface-raised); }

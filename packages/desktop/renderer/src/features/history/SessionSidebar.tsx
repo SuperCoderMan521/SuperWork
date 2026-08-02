@@ -128,6 +128,16 @@ export function SessionSidebar({
         <div className="brand" aria-label="SuperWork">
           <BrandName />
         </div>
+        <button
+          className="new-session"
+          type="button"
+          onClick={onCreate}
+          disabled={disableCreate}
+          title={disableCreate ? '等待 Desktop Core 启动完成' : '选择工作文件夹并新建对话'}
+        >
+          <span aria-hidden="true">{disableCreate ? '…' : '+'}</span>{' '}
+          {disableCreate ? 'Core 启动中' : '新任务'}
+        </button>
       </div>
       {onSelectWeixin ? (
         <div className="sidebar-tabs" role="tablist" aria-label="侧边栏视图切换" data-active-tab={tab}>

@@ -22,6 +22,11 @@ import type {
   DesktopPerformanceSnapshotSchema,
   DesktopAgentMailboxMessageSchema,
   DesktopAgentMailboxSnapshotSchema,
+  DesktopChannelSnapshotSchema,
+  DesktopChannelWeixinConversationSchema,
+  DesktopChannelWeixinMessageSchema,
+  DesktopChannelWeixinRuntimeSchema,
+  DesktopChannelWeixinSnapshotSchema,
   DesktopScheduledTaskSchema,
   DesktopScheduledTasksSnapshotSchema,
   BuddySnapshotSchema,
@@ -34,6 +39,11 @@ export type DesktopError = z.infer<typeof DesktopErrorSchema>
 export type DesktopEvent = z.infer<typeof DesktopEventSchema>
 export type DesktopConfigItem = z.infer<typeof DesktopConfigItemSchema>
 export type DesktopConfigSnapshot = z.infer<typeof DesktopConfigSnapshotSchema>
+export type DesktopChannelSnapshot = z.infer<typeof DesktopChannelSnapshotSchema>
+export type DesktopChannelWeixinSnapshot = z.infer<typeof DesktopChannelWeixinSnapshotSchema>
+export type DesktopChannelWeixinMessage = z.infer<typeof DesktopChannelWeixinMessageSchema>
+export type DesktopChannelWeixinConversation = z.infer<typeof DesktopChannelWeixinConversationSchema>
+export type DesktopChannelWeixinRuntime = z.infer<typeof DesktopChannelWeixinRuntimeSchema>
 export type DesktopFileEntry = z.infer<typeof DesktopFileEntrySchema>
 export type DesktopMemoryFile = z.infer<typeof DesktopMemoryFileSchema>
 export type DesktopModelConnectionResult = z.infer<

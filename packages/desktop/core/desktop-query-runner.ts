@@ -446,6 +446,14 @@ export class DesktopQueryRunner {
     return killed
   }
 
+  cleanupAll(): number {
+    let killed = 0
+    for (const sessionId of [...this.engines.keys()]) {
+      killed += this.cleanupSession(sessionId)
+    }
+    return killed
+  }
+
   async *run(input: QueryRunInput): AsyncGenerator<unknown> {
     console.error(`[desktop-core] query.start session=${input.session.id}`)
     const bootstrapModule = await import('src/bootstrap/state.js')

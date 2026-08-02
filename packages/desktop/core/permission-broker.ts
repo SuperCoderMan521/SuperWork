@@ -42,8 +42,10 @@ type PermissionBrokerOptions = {
 /** Bridges the Core's awaited permission checks to serializable UI events. */
 export class PermissionBroker {
   private readonly pending = new Map<string, PendingPermission>()
+  private readonly closedSessions = new Set<string>()
   private readonly createId: () => string
   private readonly timeoutMs: number
+  private closedAll = false
 
   constructor(private readonly options: PermissionBrokerOptions) {
     this.createId = options.createId ?? randomUUID
@@ -55,6 +57,10 @@ export class PermissionBroker {
   }
 
   request(input: PermissionRequestInput): Promise<PermissionResolution> {
+    if (this.closedAll || this.closedSessions.has(input.sessionId)) {
+      return Promise.resolve({ decision: 'deny' })
+    }
+
     const id = this.createId()
     const decisions: PermissionDecision[] = input.allowSession
       ? ['deny', 'allow_once', 'allow_session']
@@ -103,10 +109,20 @@ export class PermissionBroker {
     return ids.length
   }
 
+  closeSession(sessionId: string): number {
+    this.closedSessions.add(sessionId)
+    return this.cancelSession(sessionId)
+  }
+
   cancelAll(): number {
     const ids = [...this.pending.keys()]
     for (const id of ids) this.resolve(id, 'deny')
     return ids.length
+  }
+
+  closeAll(): number {
+    this.closedAll = true
+    return this.cancelAll()
   }
 }
 

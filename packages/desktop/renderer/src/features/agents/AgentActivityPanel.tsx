@@ -43,11 +43,23 @@ export type ObservedAgentMessage = {
   kind: 'message' | 'assignment' | 'system'
 }
 
+export type DelegatedAgentRun = {
+  id: string
+  title: string
+  type: string
+  prompt?: string
+  output?: string
+  status: ObservedAgent['status']
+  startedAt?: number
+  completedAt?: number
+}
+
 export type AgentActivity = {
   teamName: string | null
   agents: ObservedAgent[]
   tasks: ObservedTask[]
   messages: ObservedAgentMessage[]
+  delegatedRuns: DelegatedAgentRun[]
   summary: {
     runningAgents: number
     completedAgents: number
@@ -169,6 +181,18 @@ function textFromMessage(value: unknown): string {
   return ''
 }
 
+function outputTextFromTool(tool: DesktopToolCall, output: Record<string, unknown>): string | undefined {
+  const direct = typeof tool.output === 'string' ? tool.output.trim() : ''
+  if (direct && !direct.startsWith('{')) return direct
+  return (
+    stringField(output, 'result') ??
+    stringField(output, 'output') ??
+    stringField(output, 'content') ??
+    stringField(output, 'summary') ??
+    stringField(output, 'text')
+  )
+}
+
 function labelForStatus(status: AgentTaskStatus): string {
   if (status === 'in_progress') return '运行中'
   if (status === 'completed') return '已完成'
@@ -201,6 +225,24 @@ function compactText(text: string, maxLength = 56): string {
   return `${normalized.slice(0, maxLength)}…`
 }
 
+function looksLikePlainTaskAssignment(message: {
+  from: string
+  text: string
+  summary?: string
+}, recipient: string): boolean {
+  if (recipient === 'team-lead' || message.from !== 'team-lead') return false
+  const text = `${message.summary ?? ''}\n${message.text}`.toLowerCase()
+  return (
+    text.includes('task_assignment') ||
+    text.includes('task brief') ||
+    text.includes('brief') ||
+    text.includes('任务') ||
+    text.includes('分配') ||
+    text.includes('开始执行') ||
+    text.includes('请立即开始')
+  )
+}
+
 function taskStatusFromToolState(tool: DesktopToolCall): ObservedAgent['status'] {
   const input = asRecord(tool.input)
   const desktopStatus = stringField(input, 'desktop_status')
@@ -222,6 +264,7 @@ export function buildAgentActivity(
   const agents = new Map<string, ObservedAgent>()
   const tasks = new Map<string, ObservedTask>()
   const messages: ObservedAgentMessage[] = []
+  const delegatedRuns: DelegatedAgentRun[] = []
   const toolsByAgent = new Map<string, { tools: Record<string, DesktopToolCall>; order: string[] }>()
 
   for (const [index, id] of order.entries()) {
@@ -248,6 +291,24 @@ export function buildAgentActivity(
       const status = taskStatusFromToolState(tool)
       const agentTeamName: string | undefined =
         stringField(input, 'team_name') ?? teamName ?? undefined
+      const delegatedType =
+        stringField(input, 'subagent_type') ?? stringField(input, 'agent_type')
+      const title =
+        stringField(input, 'description') ??
+        stringField(input, 'task') ??
+        stringField(input, 'subject') ??
+        tool.summary ??
+        agentName
+      delegatedRuns.push({
+        id: tool.id,
+        title,
+        type: delegatedType ?? 'agent',
+        prompt: stringField(input, 'prompt'),
+        output: outputTextFromTool(tool, effective.output),
+        status,
+        startedAt: tool.startedAt,
+        completedAt: tool.completedAt,
+      })
       if (!teamName && agentTeamName) teamName = agentTeamName
       agents.set(agentName, {
         ...(agents.get(agentName) ?? {
@@ -259,7 +320,7 @@ export function buildAgentActivity(
         }),
         name: agentName,
         id: tool.agentId,
-        type: stringField(input, 'subagent_type') ?? stringField(input, 'agent_type'),
+        type: delegatedType,
         teamName: tool.teamName ?? agentTeamName,
         status,
       })
@@ -353,6 +414,7 @@ export function buildAgentActivity(
           const parsed = parseJsonRecord(mailboxMessage.text)
           const protocolType = stringField(parsed, 'type')
           const isAssignment = protocolType === 'task_assignment'
+          const isPlainAssignment = !protocolType && looksLikePlainTaskAssignment(mailboxMessage, recipient)
           const text = isAssignment
             ? `分配任务：${stringField(parsed, 'subject') ?? stringField(parsed, 'taskId') ?? mailboxMessage.summary ?? '未命名任务'}`
             : mailboxMessage.text
@@ -368,19 +430,20 @@ export function buildAgentActivity(
               files: [],
             })
           }
-          if (isAssignment && recipient !== 'team-lead') {
+          if ((isAssignment || isPlainAssignment) && recipient !== 'team-lead') {
             const taskId =
               stringField(parsed, 'taskId') ??
               stringField(parsed, 'task_id') ??
-              `${team.name}:${recipient}:${messages.length}`
+              `${team.name}:${recipient}:mailbox-assignment`
             const subject =
               stringField(parsed, 'subject') ??
               mailboxMessage.summary ??
+              compactText(mailboxMessage.text, 80) ??
               taskId
             tasks.set(taskId, {
               id: taskId,
               subject,
-              description: stringField(parsed, 'description'),
+              description: stringField(parsed, 'description') ?? (isPlainAssignment ? mailboxMessage.text : undefined),
               status: 'in_progress',
               owner: recipient,
               updatedAt: timestamp,
@@ -399,7 +462,7 @@ export function buildAgentActivity(
             text,
             summary: mailboxMessage.summary,
             timestamp,
-            kind: isAssignment ? 'assignment' : protocolType ? 'system' : 'message',
+            kind: isAssignment || isPlainAssignment ? 'assignment' : protocolType ? 'system' : 'message',
           })
         }
       }
@@ -443,6 +506,7 @@ export function buildAgentActivity(
     teamName,
     agents: agentList,
     tasks: taskList,
+    delegatedRuns,
     messages: messages
       .filter(message => message.text.length > 0)
       .sort((left, right) => (left.timestamp ?? 0) - (right.timestamp ?? 0))
@@ -471,6 +535,7 @@ export function AgentActivityPanel({
   const hasActivity =
     activity.agents.length > 0 ||
     activity.tasks.length > 0 ||
+    activity.delegatedRuns.length > 0 ||
     activity.messages.length > 0 ||
     activity.summary.fileCount > 0
   const workFiles = activity.agents.filter(agent => agent.files.length > 0)
@@ -500,30 +565,67 @@ export function AgentActivityPanel({
             <div><strong>{activity.messages.length}</strong><span>消息</span></div>
           </section>
 
-          <section className="agent-section">
-            <div className="agent-section-title">
-              <h3>任务执行</h3>
-              <span>{activity.summary.runningTasks} 运行中</span>
-            </div>
-            <div className="agent-task-list">
-              {activity.tasks.length === 0 ? (
-                <p className="agent-muted">暂无拆分任务</p>
-              ) : activity.tasks.map(task => (
-                <article key={task.id} className={`agent-task-card task-${task.status}`}>
-                  <div className="task-status-line">
-                    <span className="task-status-dot" />
-                    <strong>{task.subject}</strong>
-                    <em>{labelForStatus(task.status)}</em>
-                  </div>
-                  {task.description ? <p>{task.description}</p> : null}
-                  <div className="task-meta">
-                    <span>执行者</span>
-                    <b>{task.owner ?? '未分配'}</b>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
+          {activity.tasks.length > 0 ? (
+            <section className="agent-section">
+              <div className="agent-section-title">
+                <h3>任务执行</h3>
+                <span>{activity.summary.runningTasks} 运行中</span>
+              </div>
+              <div className="agent-task-list">
+                {activity.tasks.map(task => (
+                  <article key={task.id} className={`agent-task-card task-${task.status}`}>
+                    <div className="task-status-line">
+                      <span className="task-status-dot" />
+                      <strong>{task.subject}</strong>
+                      <em>{labelForStatus(task.status)}</em>
+                    </div>
+                    {task.description ? <p>{task.description}</p> : null}
+                    <div className="task-meta">
+                      <span>执行者</span>
+                      <b>{task.owner ?? '未分配'}</b>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {activity.delegatedRuns.length > 0 ? (
+            <section className="agent-section">
+              <div className="agent-section-title">
+                <h3>委派代理</h3>
+                <span>{activity.delegatedRuns.length} 个</span>
+              </div>
+              <div className="agent-delegation-list">
+                {activity.delegatedRuns.map(run => (
+                  <details
+                    key={run.id}
+                    className={`agent-delegation-card agent-${run.status}`}
+                  >
+                    <summary>
+                      <span className="agent-delegation-type">{run.type}</span>
+                      <strong>{run.title}</strong>
+                      <em>{agentLabel(run.status)}</em>
+                    </summary>
+                    {run.prompt ? (
+                      <div className="agent-delegation-block">
+                        <b>委派请求</b>
+                        <p>{run.prompt}</p>
+                      </div>
+                    ) : null}
+                    {run.output ? (
+                      <div className="agent-delegation-block">
+                        <b>输出结论</b>
+                        <p>{run.output}</p>
+                      </div>
+                    ) : (
+                      <p className="agent-muted">代理仍在运行，完成后这里会显示输出结论。</p>
+                    )}
+                  </details>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="agent-section">
             <div className="agent-section-title">

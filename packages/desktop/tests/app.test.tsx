@@ -6,8 +6,10 @@ import {
   defaultWorkspaceForNewSession,
   initialSessionIdForWorkspace,
   settingsCwdForConfig,
+  sameConfigCwd,
   sessionIdFromPendingWorkspaceSnapshot,
   selectSidebarSessions,
+  shouldPollAgentMailbox,
   tabFromSlash,
 } from '../renderer/src/app/App.js'
 import { createDesktopState } from '../renderer/src/app/reducer.js'
@@ -77,6 +79,14 @@ describe('settingsCwdForConfig', () => {
   })
 })
 
+describe('sameConfigCwd', () => {
+  test('treats Windows slash variants as the same workspace config cwd', () => {
+    expect(sameConfigCwd('G:\\ai\\test', 'G:/ai/test')).toBe(true)
+    expect(sameConfigCwd('G:/ai/test/', 'g:/ai/test')).toBe(true)
+    expect(sameConfigCwd('G:/ai/other', 'G:/ai/test')).toBe(false)
+  })
+})
+
 describe('sessionIdFromPendingWorkspaceSnapshot', () => {
   test('selects the newly created session when its cwd matches the pending workspace', () => {
     expect(
@@ -128,6 +138,7 @@ describe('tabFromSlash', () => {
     expect(tabFromSlash('/config')).toBe('model')
     expect(tabFromSlash('/config model')).toBe('model')
     expect(tabFromSlash('/config memory')).toBe('memory')
+    expect(tabFromSlash('/config channel')).toBe('channel')
     expect(tabFromSlash('/config mcp')).toBe('mcp')
     expect(tabFromSlash('/config plugins')).toBe('plugins')
     expect(tabFromSlash('/config skills')).toBe('skills')
@@ -144,6 +155,15 @@ describe('tabFromSlash', () => {
     expect(tabFromSlash('/skill list')).toBeNull()
     expect(tabFromSlash('/compact')).toBeNull()
     expect(tabFromSlash('/help')).toBeNull()
+  })
+})
+
+describe('shouldPollAgentMailbox', () => {
+  test('polls only while the visible workspace is showing the selected agent panel', () => {
+    expect(shouldPollAgentMailbox('agents', true, true)).toBe(true)
+    expect(shouldPollAgentMailbox('files', true, true)).toBe(false)
+    expect(shouldPollAgentMailbox('agents', false, true)).toBe(false)
+    expect(shouldPollAgentMailbox('agents', true, false)).toBe(false)
   })
 })
 
@@ -169,6 +189,12 @@ describe('App layout', () => {
     expect(html).toContain('打开 MCP 配置')
     expect(html).toContain('打开 Plugins 配置')
     expect(html).toContain('打开 Memory 配置')
+  })
+
+  test('renders the channel shortcut inside the same sidebar shortcut menu', () => {
+    const html = renderToStaticMarkup(<App />)
+
+    expect(html).toContain('Channel')
   })
 
   test('renders the performance shortcut inside the same sidebar shortcut menu', () => {

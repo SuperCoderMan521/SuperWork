@@ -127,4 +127,35 @@ describe('PermissionBroker', () => {
     broker.resolve('permission-2', 'allow_session')
     expect(await second).toEqual({ decision: 'allow_session' })
   })
+
+  test('denies new requests for a closed session without emitting another prompt', async () => {
+    const emitted: string[] = []
+    const broker = new PermissionBroker({
+      createId: () => `permission-${emitted.length + 1}`,
+      emit: request => emitted.push(request.id),
+    })
+    const pending = broker.request({
+      sessionId: 'session-1',
+      toolCallId: 'tool-1',
+      toolName: 'Write',
+      summary: 'write file',
+      input: {},
+      allowSession: true,
+    })
+
+    expect(broker.closeSession('session-1')).toBe(1)
+    expect(await pending).toEqual({ decision: 'deny' })
+    const late = await broker.request({
+      sessionId: 'session-1',
+      toolCallId: 'tool-late',
+      toolName: 'Bash',
+      summary: 'late command',
+      input: {},
+      allowSession: true,
+    })
+
+    expect(late).toEqual({ decision: 'deny' })
+    expect(emitted).toEqual(['permission-1'])
+    expect(broker.pendingCount).toBe(0)
+  })
 })

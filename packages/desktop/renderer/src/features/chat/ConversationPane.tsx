@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import type {
+  DesktopConfigItem,
   DesktopMessage,
   DesktopToolCall,
   DesktopTurnUsageReport,
   PermissionDecision,
+  PermissionMode,
 } from '../../../../shared/protocol.js'
 import type { RendererSession } from '../../app/reducer.js'
 import { LocalArtifactCard } from '../artifacts/LocalArtifactCard.js'
@@ -11,9 +13,15 @@ import type { DesktopLocalArtifact } from '../artifacts/localArtifacts.js'
 import { PermissionPanel } from '../permissions/PermissionPanel.js'
 import { Composer } from './Composer.js'
 import { MessageRow } from './MessageRow.js'
+import { PlanProgressOverlay } from './PlanProgressOverlay.js'
 import { ToolCallCard } from './ToolCallCard.js'
 import { TurnUsageReport } from './TurnUsageReport.js'
-import { buildEditDiff, toolDisplayMeta } from './toolRendering.js'
+import {
+  buildEditDiff,
+  isShellToolName,
+  summarizeShellCommand,
+  toolDisplayMeta,
+} from './toolRendering.js'
 
 type ConversationPaneProps = {
   session: RendererSession
@@ -22,6 +30,11 @@ type ConversationPaneProps = {
   onSelectWorkspace: () => void
   onOpenFile?: (path: string) => void
   onOpenAgents?: () => void
+  onOpenSkills?: () => void
+  onOpenMcp?: () => void
+  skills?: DesktopConfigItem[]
+  mcpServers?: DesktopConfigItem[]
+  onModeChange?: (mode: PermissionMode) => void
   artifacts?: DesktopLocalArtifact[]
   onOpenArtifact?: (artifact: DesktopLocalArtifact) => void
   onResolvePermission?: (
@@ -207,9 +220,12 @@ function toolPath(tool: DesktopToolCall): string | null {
 }
 
 function toolOperationSummary(tool: DesktopToolCall): string {
+  const command = toolInputString(tool, ['command'])
+  if (command && isShellToolName(tool.name)) return summarizeShellCommand(command)
   return (
     toolPath(tool) ??
-    toolInputString(tool, ['command', 'query', 'pattern', 'glob', 'url']) ??
+    command ??
+    toolInputString(tool, ['query', 'pattern', 'glob', 'url']) ??
     tool.summary?.trim() ??
     toolDisplayMeta(tool.name).label
   )
@@ -290,6 +306,11 @@ export function ConversationPane({
   onSelectWorkspace,
   onOpenFile,
   onOpenAgents,
+  onOpenSkills,
+  onOpenMcp,
+  skills = [],
+  mcpServers = [],
+  onModeChange,
   artifacts = [],
   onOpenArtifact,
   onResolvePermission,
@@ -436,15 +457,22 @@ export function ConversationPane({
           </div>
         </div>
       ) : null}
+      <PlanProgressOverlay session={session} />
       <Composer
         generating={
           session.generationState === 'running' ||
           session.generationState === 'interrupting'
         }
         workspace={session.cwd}
+        mode={session.mode}
+        skills={skills}
+        mcpServers={mcpServers}
         onSubmit={onSubmit}
         onInterrupt={onInterrupt}
         onSelectWorkspace={onSelectWorkspace}
+        onOpenSkills={onOpenSkills}
+        onOpenMcp={onOpenMcp}
+        onModeChange={onModeChange}
       />
     </main>
   )

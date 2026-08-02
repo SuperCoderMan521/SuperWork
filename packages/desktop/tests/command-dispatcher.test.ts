@@ -2,6 +2,22 @@ import { describe, expect, test } from 'bun:test'
 import { DesktopCommandDispatcher } from '../core/command-dispatcher.js'
 import type { DesktopEvent } from '../shared/protocol.js'
 
+function channel(cwd = 'G:/project') {
+  const stateDir = `${cwd}/.claude/channels/weixin`
+  return {
+    weixin: {
+      connected: false,
+      stateDir,
+      accountPath: `${stateDir}/account.json`,
+      accessPath: `${stateDir}/access.json`,
+      cursorPath: `${stateDir}/cursor.txt`,
+      allowedUsers: 0,
+      pendingPairings: 0,
+      cursorPresent: false,
+    },
+  }
+}
+
 describe('DesktopCommandDispatcher', () => {
   test('routes workspace performance snapshots', async () => {
     const events: DesktopEvent[] = []
@@ -152,6 +168,32 @@ describe('DesktopCommandDispatcher', () => {
     })
 
     expect(calls).toEqual(['prompt:session-1:hello', 'interrupt:session-1'])
+  })
+
+  test('routes auto permission mode changes to the conversation controller', async () => {
+    const calls: string[] = []
+    const dispatcher = new DesktopCommandDispatcher({
+      controller: {
+        createSession: () => { throw new Error('not used') },
+        submitPrompt: async () => {},
+        interrupt: () => false,
+        setModel: () => {},
+        setMode: (sessionId, mode) => calls.push(`mode:${sessionId}:${mode}`),
+      },
+      listSessions: async () => [],
+      resolvePermission: () => false,
+      emit: () => {},
+      shutdown: async () => {},
+    })
+
+    await dispatcher.dispatch({
+      type: 'mode.set',
+      requestId: 'request-mode',
+      sessionId: 'session-1',
+      mode: 'auto',
+    })
+
+    expect(calls).toEqual(['mode:session-1:auto'])
   })
 
   test('does not block interruption while a prompt is running', async () => {
@@ -429,7 +471,9 @@ describe('DesktopCommandDispatcher', () => {
         mcpServers: [],
         plugins: [],
         memoryFiles: [],
+        autoMemory: { enabled: true, path: 'G:/project/.claude/memory' },
         modelConfig,
+        channel: channel(cwd),
       }),
     })
 
@@ -455,12 +499,111 @@ describe('DesktopCommandDispatcher', () => {
           mcpServers: [],
           plugins: [],
           memoryFiles: [],
+          autoMemory: { enabled: true, path: 'G:/project/.claude/memory' },
           modelConfig: {
             provider: 'openai',
             baseUrl: 'http://localhost:11434/v1',
             token: 'sk-test',
             model: 'qwen3-coder',
           },
+          channel: channel(),
+        },
+      },
+    ])
+  })
+
+  test('writes auto memory configuration and emits a saved snapshot', async () => {
+    const events: DesktopEvent[] = []
+    const dispatcher = new DesktopCommandDispatcher({
+      controller: {
+        createSession: () => { throw new Error('not used') },
+        submitPrompt: async () => {},
+        interrupt: () => false,
+        setModel: () => {},
+        setMode: () => {},
+      },
+      listSessions: async () => [],
+      resolvePermission: () => false,
+      emit: event => events.push(event),
+      shutdown: async () => {},
+      setAutoMemoryEnabled: async (cwd, enabled) => ({
+        cwd,
+        skills: [],
+        mcpServers: [],
+        plugins: [],
+        memoryFiles: [],
+        autoMemory: { enabled, path: 'G:/project/.claude/memory' },
+        channel: channel(cwd),
+      }),
+    })
+
+    await dispatcher.dispatch({
+      type: 'config.autoMemory.set',
+      requestId: 'request-memory',
+      cwd: 'G:/project',
+      enabled: false,
+    })
+
+    expect(events).toEqual([{
+      type: 'config.saved',
+      requestId: 'request-memory',
+      config: {
+        cwd: 'G:/project',
+        skills: [],
+        mcpServers: [],
+        plugins: [],
+        memoryFiles: [],
+        autoMemory: { enabled: false, path: 'G:/project/.claude/memory' },
+        channel: channel(),
+      },
+    }])
+  })
+
+  test('imports a skill and emits a refreshed config snapshot', async () => {
+    const events: DesktopEvent[] = []
+    const dispatcher = new DesktopCommandDispatcher({
+      controller: {
+        createSession: () => { throw new Error('not used') },
+        submitPrompt: async () => {},
+        interrupt: () => false,
+        setModel: () => {},
+        setMode: () => {},
+      },
+      listSessions: async () => [],
+      resolvePermission: () => false,
+      emit: event => events.push(event),
+      shutdown: async () => {},
+      importSkill: async (cwd, sourcePath) => ({
+        cwd,
+        skills: [{ id: sourcePath, name: 'review', enabled: true, path: sourcePath }],
+        mcpServers: [],
+        plugins: [],
+        memoryFiles: [],
+        autoMemory: { enabled: false, path: 'G:/project/.claude/memory' },
+        channel: channel(cwd),
+      }),
+    })
+
+    await dispatcher.dispatch({
+      type: 'skill.import',
+      requestId: 'request-skill',
+      cwd: 'G:/project',
+      sourcePath: 'G:/skills/review.zip',
+      allowAutoInstall: true,
+    })
+
+    expect(events).toEqual([
+      {
+        type: 'skill.imported',
+        requestId: 'request-skill',
+        config: {
+          cwd: 'G:/project',
+          skills: [{ id: 'G:/skills/review.zip', name: 'review', enabled: true, path: 'G:/skills/review.zip' }],
+          mcpServers: [],
+          plugins: [],
+          memoryFiles: [],
+          autoMemory: { enabled: false, path: 'G:/project/.claude/memory' },
+          channel: channel(),
         },
       },
     ])

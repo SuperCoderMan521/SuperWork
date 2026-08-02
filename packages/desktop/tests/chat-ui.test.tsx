@@ -7,7 +7,15 @@ import {
   getConversationTimeline,
   groupConversationTimeline,
 } from '../renderer/src/features/chat/ConversationPane.js'
+import {
+  Composer,
+  buildPromptWithSelectedSkills,
+} from '../renderer/src/features/chat/Composer.js'
 import { MarkdownMessage } from '../renderer/src/features/chat/MarkdownMessage.js'
+import {
+  PlanProgressOverlay,
+  derivePlanProgress,
+} from '../renderer/src/features/chat/PlanProgressOverlay.js'
 import { renderPlantUmlToSvg } from '../renderer/src/features/chat/plantumlLocalRenderer.js'
 import {
   buildEditDiff,
@@ -64,6 +72,22 @@ const session: RendererSession = {
 }
 
 describe('desktop chat UI', () => {
+  test('marks the composer with animated generation affordances', () => {
+    const html = renderToStaticMarkup(
+      <Composer
+        generating={true}
+        workspace="G:/project"
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+      />,
+    )
+
+    expect(html).toContain('composer-generating')
+    expect(html).toContain('composer-status-shimmer')
+    expect(html).toContain('aria-live="polite"')
+  })
+
   test('renders session history in the sidebar with workspace paths', () => {
     const html = renderToStaticMarkup(
       <SessionSidebar
@@ -160,6 +184,172 @@ describe('desktop chat UI', () => {
     expect(html).toContain('输入问题')
     expect(html).toContain('选择工作区')
     expect(html).toContain('aria-label="中断生成"')
+  })
+
+  test('renders the rich composer toolbar with skills mcp and auto approval controls', () => {
+    const html = renderToStaticMarkup(
+      <Composer
+        generating={false}
+        workspace="G:/project"
+        mode="default"
+        skills={[
+          { id: 'skill-1', name: 'review', enabled: true, path: 'G:/project/.agents/skills/review' },
+        ]}
+        mcpServers={[
+          { id: 'mcp-1', name: 'filesystem', enabled: true, path: 'G:/project/.mcp.json' },
+        ]}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+        onModeChange={() => {}}
+      />,
+    )
+
+    expect(html).toContain('composer-shell')
+    expect(html).toContain('今天帮你做些什么')
+    expect(html).toContain('模型')
+    expect(html).toContain('Ask')
+    expect(html).toContain('Plan')
+    expect(html).not.toContain('Craft')
+    expect(html).toContain('技能')
+    expect(html).toContain('搜索技能')
+    expect(html).toContain('review')
+    expect(html).toContain('composer-skill-avatar')
+    expect(html).toContain('导入技能')
+    expect(html).toContain('连应用')
+    expect(html).toContain('搜索应用')
+    expect(html).toContain('filesystem')
+    expect(html).toContain('composer-mcp-avatar')
+    expect(html).toContain('管理应用连接')
+    expect(html).toContain('composer-approval-menu')
+    expect(html).toContain('请求批准')
+    expect(html).toContain('替我审批')
+    expect(html).toContain('完全访问权限')
+    expect(html).toContain('仅对检测到的风险操作请求批准')
+    expect(html).not.toContain('全部默认自动审核')
+    expect(html).not.toContain('composer-approval-toggle')
+    expect(html).not.toContain('<option value="default"')
+    expect(html).not.toContain('<option value="plan"')
+    expect(html).not.toContain('不再询问')
+    expect(html).toContain('选择工作空间')
+    expect(html).toContain('内容由 AI 生成，请核实重要信息')
+    expect(html).not.toContain('⟳ 自动⌄')
+    expect(html).not.toContain('aria-label="添加"')
+    expect(html).not.toContain('aria-label="增强"')
+    expect(html).not.toContain('aria-label="语音"')
+  })
+
+  test('prefixes submitted prompts with selected skill usage hints', () => {
+    const prompt = buildPromptWithSelectedSkills('写一篇文章', [
+      {
+        id: 'skill-1',
+        name: 'review',
+        enabled: true,
+        path: 'G:/project/.agents/skills/review',
+      },
+      {
+        id: 'skill-2',
+        name: 'Viral Writer',
+        enabled: true,
+        path: 'C:/Users/Administrator/.claude/skills/Viral_Writer_Skill',
+      },
+    ])
+
+    expect(prompt).toBe([
+      'Use the /review skill for this request.',
+      'Use the /Viral_Writer_Skill skill for this request.',
+      '',
+      '写一篇文章',
+    ].join('\n'))
+  })
+
+  test('derives live plan progress from plan mode and tool activity', () => {
+    const planSession: RendererSession = {
+      ...session,
+      mode: 'plan',
+      generationState: 'running',
+      tools: {
+        read: {
+          id: 'read',
+          name: 'Read',
+          state: 'running',
+          summary: 'src/query.ts',
+          startedAt: 200,
+        },
+      },
+      toolOrder: ['read'],
+    }
+
+    const progress = derivePlanProgress(planSession)
+
+    expect(progress.visible).toBe(true)
+    expect(progress.currentStep).toBe(2)
+    expect(progress.totalSteps).toBe(4)
+    expect(progress.steps.map(step => step.label)).toEqual([
+      '进入 Plan 模式',
+      '读取上下文与相关文件',
+      '写入或更新计划文件',
+      '提交计划等待批准',
+    ])
+  })
+
+  test('renders a click-to-open floating plan progress overlay above composer', () => {
+    const planSession: RendererSession = {
+      ...session,
+      mode: 'plan',
+      generationState: 'running',
+      tools: {
+        read: {
+          id: 'read',
+          name: 'Read',
+          state: 'running',
+          summary: 'src/query.ts',
+          startedAt: 200,
+        },
+      },
+      toolOrder: ['read'],
+    }
+    const html = renderToStaticMarkup(
+      <PlanProgressOverlay session={planSession} defaultOpen={true} />,
+    )
+
+    expect(html).toContain('plan-progress-float')
+    expect(html).toContain('plan-progress-card')
+    expect(html).toContain('进入 Plan 模式')
+    expect(html).toContain('读取上下文与相关文件')
+    expect(html).toContain('第 2 / 4 步')
+    expect(html).toContain('aria-expanded="true"')
+  })
+
+  test('maps approval menu selections to concrete permission modes', () => {
+    const autoHtml = renderToStaticMarkup(
+      <Composer
+        generating={false}
+        workspace="G:/project"
+        mode="auto"
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+        onModeChange={() => {}}
+      />,
+    )
+    const bypassHtml = renderToStaticMarkup(
+      <Composer
+        generating={false}
+        workspace="G:/project"
+        mode="bypassPermissions"
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+        onModeChange={() => {}}
+      />,
+    )
+
+    expect(autoHtml).toContain('composer-approval-trigger')
+    expect(autoHtml).toContain('替我审批')
+    expect(autoHtml).toContain('aria-pressed="true"')
+    expect(bypassHtml).toContain('完全访问权限')
+    expect(bypassHtml).toContain('aria-pressed="true"')
   })
 
   test('renders a collapsed turn usage report after a completed answer', () => {
@@ -592,6 +782,48 @@ describe('desktop chat UI', () => {
     expect(html).toContain('query')
   })
 
+  test('summarizes long shell commands without widening the conversation', () => {
+    const longCommand = [
+      'node -e',
+      '"const fs = require(\'fs\');',
+      'const html = fs.readFileSync(\'G:/ai/test/racing-game.html\', \'utf8\');',
+      'const match = html.match(/<script>([\\\\s\\\\S]*?)<\\\\/script>/);',
+      'if (!match) process.exit(1);',
+      'console.log(match[1].slice(0, 2000));"',
+    ].join(' ')
+    const html = renderToStaticMarkup(
+      <ConversationPane
+        session={{
+          ...session,
+          generationState: 'running',
+          messages: {},
+          messageOrder: [],
+          tools: {
+            shell: {
+              id: 'shell',
+              name: 'BashTool',
+              state: 'running',
+              summary: longCommand,
+              input: { command: longCommand },
+              startedAt: 1,
+            },
+          },
+          toolOrder: ['shell'],
+        }}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSelectWorkspace={() => {}}
+      />,
+    )
+
+    expect(html).toContain('Shell')
+    expect(html).not.toContain('>命令<')
+    expect(html).toContain('tool-command-summary')
+    expect(html).toContain('查看完整 Shell')
+    expect(html).toContain('node -e')
+    expect(html).not.toContain(`<span class="tool-group-description" title="${longCommand}">${longCommand}</span>`)
+  })
+
   test('filters directory-looking paths from the file panel', () => {
     const files = filesFromTools(
       {
@@ -604,7 +836,7 @@ describe('desktop chat UI', () => {
         },
         file: {
           id: 'file',
-          name: 'Read',
+          name: 'Write',
           state: 'success',
           summary: 'src/query.ts',
           input: { file_path: 'src/query.ts' },
@@ -613,6 +845,24 @@ describe('desktop chat UI', () => {
       ['folder', 'file'],
     )
     expect(files.map(file => file.path)).toEqual(['src/query.ts'])
+  })
+
+  test('keeps read-only tool references out of the produced file panel', () => {
+    const files = filesFromTools(
+      {
+        read: {
+          id: 'read',
+          name: 'Read',
+          state: 'success',
+          summary: 'src/query.ts',
+          input: { file_path: 'src/query.ts' },
+          output: 'app.use console.log res.json process.env.PORT',
+        },
+      },
+      ['read'],
+    )
+
+    expect(files).toEqual([])
   })
 
   test('extracts bare shell artifacts from output text', () => {
@@ -649,7 +899,7 @@ describe('desktop chat UI', () => {
       ['web'],
     )
 
-    expect(files.map(file => file.path)).toEqual(['report.html'])
+    expect(files.map(file => file.path)).toEqual([])
   })
 
   test('does not extract decimal fragments as hidden files', () => {
@@ -667,7 +917,7 @@ describe('desktop chat UI', () => {
       ['shell'],
     )
 
-    expect(files.map(file => file.path)).toEqual(['.env', 'result.json'])
+    expect(files.map(file => file.path)).toEqual(['result.json'])
   })
 
   test('renders a right-side editable file panel from tool paths', () => {
@@ -679,7 +929,7 @@ describe('desktop chat UI', () => {
         agentActivity={activity}
         files={
           <ConversationFilesPanel
-            files={files}
+            files={[{ id: 'edit:src/query.ts', path: 'src/query.ts', label: 'query.ts', source: 'tool' }]}
             selectedPath="src/query.ts"
             fileContent="export const ok = true"
             onOpen={() => {}}
@@ -689,7 +939,7 @@ describe('desktop chat UI', () => {
     )
     expect(html).toContain('文件')
     expect(html).toContain('workspace-tabs')
-    expect(html).toContain('Agent')
+    expect(html).not.toContain('Agent')
     expect(html).toContain('src/query.ts')
     expect(html).not.toContain('保存')
     expect(html).toContain('export const ok')
@@ -722,6 +972,36 @@ describe('desktop chat UI', () => {
     expect(html).toContain('Agent 观测')
     expect(html).toContain('researcher')
     expect(html).not.toContain('<aside>files</aside>')
+  })
+
+  test('hides the Agent tab until the current conversation has agent activity', () => {
+    const html = renderToStaticMarkup(
+      <WorkspacePanel
+        fileCount={0}
+        activeTab="files"
+        onTabChange={() => {}}
+        agentActivity={buildAgentActivity({}, [])}
+        files={<aside>files</aside>}
+      />,
+    )
+
+    expect(html).not.toContain('Agent')
+    expect(html).toContain('<aside>files</aside>')
+  })
+
+  test('falls back to files when the selected Agent tab no longer has agent activity', () => {
+    const html = renderToStaticMarkup(
+      <WorkspacePanel
+        fileCount={0}
+        activeTab="agents"
+        onTabChange={() => {}}
+        agentActivity={buildAgentActivity({}, [])}
+        files={<aside>files</aside>}
+      />,
+    )
+
+    expect(html).not.toContain('Agent 瑙傛祴')
+    expect(html).toContain('<aside>files</aside>')
   })
 
   test('can render the right workspace directly on the Artifacts tab', () => {
@@ -809,10 +1089,9 @@ describe('desktop chat UI', () => {
   })
 
   test('renders file content with a styled code preview and roomy layout', () => {
-    const files = filesFromTools(session.tools, session.toolOrder)
     const html = renderToStaticMarkup(
       <ConversationFilesPanel
-        files={files}
+        files={[{ id: 'edit:src/query.ts', path: 'src/query.ts', label: 'query.ts', source: 'tool' }]}
         selectedPath="src/query.ts"
         fileContent={'export const ok = true\nconsole.log(ok)'}
         onOpen={() => {}}
@@ -820,6 +1099,8 @@ describe('desktop chat UI', () => {
     )
 
     expect(html).toContain('files-panel-wide')
+    expect(html).toContain('files-panel-split')
+    expect(html).toContain('file-preview-main')
     expect(html).toContain('file-viewer')
     expect(html).toContain('language-ts')
     expect(html).toContain('line-number')
@@ -950,6 +1231,46 @@ describe('desktop chat UI', () => {
     expect(html).toContain('运行中')
   })
 
+  test('keeps delegated Plan agent runs separate and exposes their final output', () => {
+    const activity = buildAgentActivity(
+      {
+        planAgent: {
+          id: 'planAgent',
+          name: 'Agent',
+          state: 'success',
+          summary: '设计麻将游戏实现方案',
+          input: {
+            description: '设计麻将游戏实现方案',
+            prompt: '为 G:/ai/test 项目设计四人血战到底麻将的实现方案',
+            subagent_type: 'Plan',
+          },
+          output: '建议使用单文件 HTML + Canvas，包含牌墙、摸打、胡牌检测和 AI 回合调度。',
+          startedAt: 100,
+          completedAt: 200,
+        },
+      },
+      ['planAgent'],
+    )
+
+    expect(activity.delegatedRuns).toHaveLength(1)
+    expect(activity.delegatedRuns[0]).toMatchObject({
+      id: 'planAgent',
+      type: 'Plan',
+      title: '设计麻将游戏实现方案',
+      status: 'completed',
+      output: '建议使用单文件 HTML + Canvas，包含牌墙、摸打、胡牌检测和 AI 回合调度。',
+    })
+
+    const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
+
+    expect(html).toContain('agent-delegation-list')
+    expect(html).toContain('委派代理')
+    expect(html).toContain('Plan')
+    expect(html).toContain('设计麻将游戏实现方案')
+    expect(html).toContain('输出结论')
+    expect(html).toContain('单文件 HTML + Canvas')
+  })
+
   test('groups subagent work files by tool ownership metadata', () => {
     const activity = buildAgentActivity(
       {
@@ -991,6 +1312,7 @@ describe('desktop chat UI', () => {
 
     const html = renderToStaticMarkup(<AgentActivityPanel activity={activity} />)
     expect(html).toContain('Work files')
+    expect(html).not.toContain('agent-task-list')
     expect(html).toContain('<details')
     expect(html).toContain('<summary')
     expect(html).toContain('worker-output.ts')
@@ -1130,6 +1452,44 @@ describe('desktop chat UI', () => {
     }])
     expect(activity.agents.find(agent => agent.name === 'backend')?.currentTasks).toEqual([
       '实现后端 API',
+    ])
+  })
+
+  test('promotes plain mailbox task briefs into the task execution list', () => {
+    const activity = buildAgentActivity({
+      team: {
+        id: 'team',
+        name: 'TeamCreate',
+        state: 'success',
+        summary: 'user-system-team',
+        input: { team_name: 'user-system-team' },
+      },
+    }, ['team'], {
+      generatedAt: 100,
+      teams: [{
+        name: 'user-system-team',
+        inboxes: [{
+          agentName: 'architect',
+          messages: [{
+            from: 'team-lead',
+            text: '你的完整任务 brief 如下，请立即开始架构设计任务：在 docs/design.md 撰写用户系统技术设计文档。',
+            timestamp: '2026-08-01T00:00:00.000Z',
+            read: false,
+            summary: '发送架构师完整任务brief',
+          }],
+        }],
+      }],
+    })
+
+    expect(activity.tasks).toHaveLength(1)
+    expect(activity.tasks[0]).toMatchObject({
+      id: 'user-system-team:architect:mailbox-assignment',
+      subject: '发送架构师完整任务brief',
+      owner: 'architect',
+      status: 'in_progress',
+    })
+    expect(activity.agents.find(agent => agent.name === 'architect')?.currentTasks).toEqual([
+      '发送架构师完整任务brief',
     ])
   })
 

@@ -6,6 +6,7 @@ import type { AppState } from 'src/state/AppStateStore.js'
 import { getDefaultAppState } from 'src/state/AppStateStore.js'
 import {
   cleanupInProcessTeammatesForSession,
+  DesktopQueryRunner,
   createDesktopCanUseTool,
   createDesktopLeaderPermissionHandler,
   desktopSlashFallback,
@@ -174,6 +175,37 @@ describe('cleanupInProcessTeammatesForSession', () => {
 
     expect(count).toBe(1)
     expect(killed).toEqual(['owned'])
+  })
+})
+
+describe('DesktopQueryRunner cleanupAll behavior', () => {
+  test('cleans every tracked session through the same cleanup path', () => {
+    const broker = new PermissionBroker({ emit: () => {} })
+    const runner = new DesktopQueryRunner(broker)
+    const engines = (runner as unknown as {
+      engines: Map<string, {
+        engine: { interrupt: () => void }
+        appState: AppState
+      }>
+    }).engines
+    let interrupts = 0
+    const firstState = getDefaultAppState()
+    firstState.tasks = {}
+    const secondState = getDefaultAppState()
+    secondState.tasks = {}
+    engines.set('session-1', {
+      engine: { interrupt: () => { interrupts += 1 } },
+      appState: firstState,
+    })
+    engines.set('session-2', {
+      engine: { interrupt: () => { interrupts += 1 } },
+      appState: secondState,
+    })
+
+    expect(runner.cleanupAll()).toBe(0)
+    expect(interrupts).toBe(2)
+    expect(engines.size).toBe(0)
+    expect(runner.cleanupAll()).toBe(0)
   })
 })
 

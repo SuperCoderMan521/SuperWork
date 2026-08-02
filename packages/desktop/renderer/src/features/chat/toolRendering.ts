@@ -17,6 +17,17 @@ export type ToolDisplayMeta = {
   label: string
 }
 
+export function isShellToolName(name: string): boolean {
+  const normalized = name.toLowerCase()
+  return normalized.includes('bash') || normalized.includes('shell')
+}
+
+export function summarizeShellCommand(command: string, maxLength = 96): string {
+  const normalized = command.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
@@ -45,8 +56,8 @@ export function toolDisplayMeta(name: string): ToolDisplayMeta {
   if (normalized.includes('read')) return { icon: '📖', label: '读取' }
   if (normalized.includes('edit')) return { icon: '✎', label: '编辑' }
   if (normalized.includes('write')) return { icon: '＋', label: '写入' }
-  if (normalized.includes('bash') || normalized.includes('shell')) {
-    return { icon: '⌁', label: '命令' }
+  if (isShellToolName(name)) {
+    return { icon: '⌁', label: 'Shell' }
   }
   if (normalized.includes('grep') || normalized.includes('glob')) {
     return { icon: '⌕', label: '搜索' }

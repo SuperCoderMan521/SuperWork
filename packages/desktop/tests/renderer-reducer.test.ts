@@ -5,6 +5,34 @@ import {
 } from '../renderer/src/app/reducer.js'
 
 describe('desktopReducer', () => {
+  test('optimistically updates the local session permission mode', () => {
+    const state = desktopReducer(createDesktopState(), {
+      type: 'session.snapshot',
+      sessionId: 'session-1',
+      sequence: 1,
+      session: {
+        id: 'session-1',
+        title: 'Conversation',
+        cwd: 'G:/project',
+        updatedAt: 1,
+        model: 'sonnet',
+        mode: 'default',
+        messages: [],
+        tools: [],
+        generationState: 'idle',
+        sequence: 1,
+      },
+    })
+
+    const next = desktopReducer(state, {
+      type: 'renderer.localModeChanged',
+      sessionId: 'session-1',
+      mode: 'auto',
+    })
+
+    expect(next.sessions['session-1']?.mode).toBe('auto')
+  })
+
   test('adds streaming text without rebuilding existing messages', () => {
     const state = createDesktopState()
     const next = desktopReducer(state, {

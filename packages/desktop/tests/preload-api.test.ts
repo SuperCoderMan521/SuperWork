@@ -10,6 +10,7 @@ describe('createDesktopApi', () => {
       () => 'request-1',
       {
         selectWorkspace: () => Promise.resolve(null),
+        selectSkillSource: () => Promise.resolve(null),
         listWorkspaceEditors: () => Promise.resolve([]),
         openWorkspaceInEditor: () => Promise.resolve(),
         get: () =>
@@ -23,6 +24,7 @@ describe('createDesktopApi', () => {
       },
     )
     expect(Object.keys(api).sort()).toEqual([
+      'clearWeixinChannel',
       'compactMemory',
       'createSession',
       'deleteSession',
@@ -32,10 +34,13 @@ describe('createDesktopApi', () => {
       'getDiagnostics',
       'getPerformance',
       'getScheduledTasks',
+      'getWeixinChannel',
       'hatchBuddy',
+      'importSkill',
       'interruptGeneration',
       'listSessions',
       'listWorkspaceEditors',
+      'loginWeixinChannel',
       'openLogFolder',
       'openWorkspaceInEditor',
       'persistScheduledTask',
@@ -45,10 +50,13 @@ describe('createDesktopApi', () => {
       'rehatchBuddy',
       'resolvePermission',
       'resumeSession',
+      'selectSkillSource',
       'selectWorkspace',
+      'setAutoMemoryEnabled',
       'setBuddyMuted',
       'setMode',
       'setModel',
+      'startWeixinChannel',
       'submitPrompt',
       'subscribe',
       'testConfig',
@@ -127,12 +135,18 @@ describe('createDesktopApi', () => {
       token: 'sk-test',
       model: 'qwen3-coder',
     })
+    api.setAutoMemoryEnabled('G:/project', false)
     api.testConfig('G:/project', {
       provider: 'openai',
       baseUrl: 'http://localhost:11434/v1',
       token: 'sk-test',
       model: 'qwen3-coder',
     })
+    api.importSkill('G:/project', 'G:/skills/review.zip', true)
+    api.loginWeixinChannel('G:/project')
+    api.clearWeixinChannel('G:/project')
+    api.startWeixinChannel('G:/project')
+    api.getWeixinChannel('G:/project')
     api.readFile('src/app.ts')
     api.writeFile('src/app.ts', 'export const ok = true', 'G:/project')
     api.readMemory('G:/project/CLAUDE.md')
@@ -142,7 +156,13 @@ describe('createDesktopApi', () => {
     expect(commands.map(command => command.type)).toEqual([
       'config.get',
       'config.write',
+      'config.autoMemory.set',
       'config.test',
+      'skill.import',
+      'channel.weixin.login',
+      'channel.weixin.clear',
+      'channel.weixin.start',
+      'channel.weixin.get',
       'file.read',
       'file.write',
       'memory.read',
@@ -158,6 +178,7 @@ describe('createDesktopApi', () => {
       () => 'request-1',
       {
         selectWorkspace: () => Promise.resolve('G:/project'),
+        selectSkillSource: () => Promise.resolve('G:/skills/review.zip'),
         listWorkspaceEditors: () => Promise.resolve([
           { id: 'vscode', name: 'Visual Studio Code', icon: 'vscode' },
         ]),
@@ -174,6 +195,7 @@ describe('createDesktopApi', () => {
     )
 
     await expect(api.selectWorkspace()).resolves.toBe('G:/project')
+    await expect(api.selectSkillSource('zip')).resolves.toBe('G:/skills/review.zip')
     await expect(api.listWorkspaceEditors(true)).resolves.toEqual([
       { id: 'vscode', name: 'Visual Studio Code', icon: 'vscode' },
     ])

@@ -1,5 +1,10 @@
 import type { DesktopToolCall } from '../../../../shared/protocol.js'
-import { buildEditDiff, toolDisplayMeta } from './toolRendering.js'
+import {
+  buildEditDiff,
+  isShellToolName,
+  summarizeShellCommand,
+  toolDisplayMeta,
+} from './toolRendering.js'
 
 function stateLabel(state: DesktopToolCall['state']): string {
   if (state === 'running') return '执行中'
@@ -26,6 +31,10 @@ function inputRecord(input: unknown): Record<string, unknown> {
 function inputString(input: unknown, key: string): string | null {
   const value = inputRecord(input)[key]
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function shellCommand(tool: DesktopToolCall): string | null {
+  return isShellToolName(tool.name) ? inputString(tool.input, 'command') : null
 }
 
 function agentToolSummary(tool: DesktopToolCall): string | null {
@@ -64,6 +73,8 @@ export function ToolCallCard({
   const meta = toolDisplayMeta(tool.name)
   const diff = buildEditDiff(tool)
   const path = diff?.path ?? inputPath(tool.input)
+  const command = shellCommand(tool)
+  const commandSummary = command ? summarizeShellCommand(command) : null
 
   const header = (
     <>
@@ -71,7 +82,11 @@ export function ToolCallCard({
           {meta.icon}
         </span>
         <strong>{meta.label}</strong>
-        {path && onOpenFile ? (
+        {commandSummary ? (
+          <span className="tool-command-summary" title={command ?? undefined}>
+            {commandSummary}
+          </span>
+        ) : path && onOpenFile ? (
           <button
             className="tool-file-link"
             type="button"
@@ -120,6 +135,11 @@ export function ToolCallCard({
             ))}
           </pre>
         </div>
+      ) : command ? (
+        <details className="tool-command-detail">
+          <summary>查看完整 Shell</summary>
+          <pre>{command}</pre>
+        </details>
       ) : tool.input !== undefined ? (
         <pre>{JSON.stringify(tool.input, null, 2)}</pre>
       ) : null}

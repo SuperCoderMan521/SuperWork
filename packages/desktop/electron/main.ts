@@ -36,8 +36,11 @@ function openSettingsFromMenu(): void {
 
 async function createWindow(): Promise<void> {
   if (!diagnostics) {
+    const logDirectory = app.isPackaged
+      ? join(app.getPath('userData'), 'logs')
+      : join(import.meta.dirname, '..', '..', 'logs')
     diagnostics = new DiagnosticsService(
-      new DesktopLogger({ directory: join(app.getPath('userData'), 'logs') }),
+      new DesktopLogger({ directory: logDirectory }),
     )
     diagnostics.logger.info(
       'app',

@@ -132,9 +132,7 @@ export function SessionSidebar({
       <ul className="sidebar-config-list" aria-label="配置入口">
         {onOpenPerformance ? <li onClick={onOpenPerformance}>性能</li> : null}
         {onOpenScheduledTasks ? <li onClick={onOpenScheduledTasks}>定时</li> : null}
-        {onOpenSettings ? <li onClick={() => onOpenSettings('model')}>模型</li> : null}
         {onOpenSettings ? <li onClick={() => onOpenSettings('skills')}>Skills</li> : null}
-        {onOpenSettings ? <li onClick={() => onOpenSettings('mcp')}>MCP</li> : null}
         {onOpenSettings ? <li onClick={() => onOpenSettings('plugins')}>Plugins</li> : null}
         {onOpenSettings ? <li onClick={() => onOpenSettings('memory')}>Memory</li> : null}
         {onOpenSettings ? <li onClick={() => onOpenSettings('channel')}>Channel</li> : null}

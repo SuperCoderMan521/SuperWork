@@ -79,9 +79,9 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .sidebar-footer { padding: 12px 8px 0; border: 0; color: var(--muted); background: transparent; text-align: left; font-size: 12px; }
 .sidebar-footer:hover { color: #d0d1d4; }
 .sidebar-actions { display: grid; gap: 8px; padding-top: 12px; }
-.sidebar-config-list { list-style: none; padding: 0 8px; margin: 0 0 4px; display: flex; flex-direction: column; max-height: 40vh; overflow-y: auto; flex-shrink: 0; }
-.sidebar-config-list li { color: var(--muted); font-size: 11px; line-height: 1.5; cursor: pointer; }
-.sidebar-config-list li:hover { color: #f1f2f4; }
+.sidebar-config-list { list-style: none; padding: 0 8px; margin: 0 0 8px; display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; flex-shrink: 0; }
+.sidebar-config-list li { padding: 5px 8px; color: #c8c9cc; font-size: 12px; line-height: 1.4; cursor: pointer; border-radius: 6px; }
+.sidebar-config-list li:hover { color: #f1f2f4; background: var(--selection); }
 .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #5b9b68; }
 .status-dot.status-starting, .status-dot.status-restarting { background: #a98b4b; }
 .status-dot.status-failed, .status-dot.status-stopped { background: #a95e66; }

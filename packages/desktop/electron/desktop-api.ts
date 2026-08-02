@@ -63,6 +63,7 @@ type DiagnosticsApi = {
   selectSkillSource?: (kind: 'zip' | 'folder') => Promise<string | null>
   listWorkspaceEditors?: (refresh: boolean) => Promise<WorkspaceEditor[]>
   openWorkspaceInEditor?: (editorId: string, workspace: string) => Promise<void>
+  confirm?: (options: { title?: string; message: string }) => Promise<boolean>
 }
 
 const unavailableDiagnostics: DiagnosticsApi = {
@@ -170,5 +171,7 @@ export function createDesktopApi(
     openWorkspaceInEditor: (editorId, workspace) =>
       diagnostics.openWorkspaceInEditor?.(editorId, workspace) ??
       Promise.reject(new Error('Workspace editor API is unavailable')),
+    confirm: options =>
+      diagnostics.confirm?.(options) ?? Promise.resolve(true),
   })
 }

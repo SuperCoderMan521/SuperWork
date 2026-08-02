@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { DesktopCommandSchema } from '../shared/schemas.js'
 import {
   DESKTOP_COMMAND_CHANNEL,
+  DESKTOP_CONFIRM_CHANNEL,
   DESKTOP_DIAGNOSTICS_GET_CHANNEL,
   DESKTOP_EVENT_CHANNEL,
   DESKTOP_LOG_FOLDER_OPEN_CHANNEL,
@@ -226,6 +227,21 @@ ipcMain.handle(
     await workspaceEditors.open(input.editorId, input.workspace)
   },
 )
+ipcMain.handle(DESKTOP_CONFIRM_CHANNEL, (_event, value: unknown) => {
+  if (!mainWindow) return false
+  const input = typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : {}
+  const result = dialog.showMessageBoxSync(mainWindow, {
+    type: 'question',
+    buttons: ['取消', '确认'],
+    defaultId: 1,
+    cancelId: 0,
+    title: typeof input.title === 'string' ? input.title : '确认',
+    message: typeof input.message === 'string' ? input.message : '确定执行此操作？',
+  })
+  return result === 1
+})
 
 app.whenReady().then(() => {
   console.log('[electron-main] app ready, creating window + sidecar')

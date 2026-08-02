@@ -130,12 +130,10 @@ export function SessionSidebar({
         </div>
       </div>
       <ul className="sidebar-config-list" aria-label="配置入口">
-        {onOpenPerformance ? <li onClick={onOpenPerformance}>性能</li> : null}
-        {onOpenScheduledTasks ? <li onClick={onOpenScheduledTasks}>定时</li> : null}
-        {onOpenSettings ? <li onClick={() => onOpenSettings('skills')}>Skills</li> : null}
-        {onOpenSettings ? <li onClick={() => onOpenSettings('plugins')}>Plugins</li> : null}
-        {onOpenSettings ? <li onClick={() => onOpenSettings('memory')}>Memory</li> : null}
-        {onOpenSettings ? <li onClick={() => onOpenSettings('channel')}>Channel</li> : null}
+        {onOpenPerformance ? <li onClick={onOpenPerformance}><span className="config-icon" aria-hidden="true">◷</span>性能</li> : null}
+        {onOpenScheduledTasks ? <li onClick={onOpenScheduledTasks}><span className="config-icon" aria-hidden="true">⏱</span>定时任务</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('plugins')}><span className="config-icon" aria-hidden="true">◫</span>Plugins</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('channel')}><span className="config-icon" aria-hidden="true">☷</span>Channel</li> : null}
       </ul>
       {onSelectWeixin ? (
         <div className="sidebar-tabs" role="tablist" aria-label="侧边栏视图切换" data-active-tab={tab}>
@@ -162,14 +160,16 @@ export function SessionSidebar({
           </button>
         </div>
       ) : null}
-      <button
-        className="new-session"
-        type="button"
-        onClick={onCreate}
-        title="选择工作文件夹并新建对话"
-      >
-        <span aria-hidden="true">+</span> 新任务
-      </button>
+      {tab === 'sessions' ? (
+        <button
+          className="new-session"
+          type="button"
+          onClick={onCreate}
+          title="选择工作文件夹并新建对话"
+        >
+          <span aria-hidden="true">+</span> 新建任务
+        </button>
+      ) : null}
       <nav className="session-nav" aria-label="对话历史" data-fading={fading}>
         {tab === 'sessions' ? (
           <>

@@ -54,6 +54,7 @@ export type DesktopApi = {
   selectSkillSource(kind: 'zip' | 'folder'): Promise<string | null>
   listWorkspaceEditors(refresh?: boolean): Promise<WorkspaceEditor[]>
   openWorkspaceInEditor(editorId: string, workspace: string): Promise<void>
+  confirm(options: { title?: string; message: string }): Promise<boolean>
 }
 
 type DiagnosticsApi = {

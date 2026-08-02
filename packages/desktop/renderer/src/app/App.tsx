@@ -534,13 +534,11 @@ export function App(): React.ReactNode {
   }
 
   const deleteSession = async (sessionId: string) => {
-    if (window.desktopApi.confirm) {
-      const confirmed = await window.desktopApi.confirm({
-        title: '删除对话',
-        message: '确定删除这个对话？此操作不可撤销。',
-      })
-      if (!confirmed) return
-    }
+    const confirmed = await window.desktopApi.confirm({
+      title: '删除对话',
+      message: '确定删除这个对话？此操作不可撤销。',
+    })
+    if (!confirmed) return
     window.desktopApi.deleteSession(sessionId)
     if (selectedId === sessionId) setSelectedId(null)
   }

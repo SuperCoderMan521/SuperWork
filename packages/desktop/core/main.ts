@@ -60,6 +60,14 @@ async function main(): Promise<void> {
     }
   }
 
+  // Trae IDE injects CI=true which forces auth to require env-var API key
+  // instead of reading from ~/.claude.json settings file. Remove it so the
+  // core can use the settings file for authentication.
+  if (process.env.CI) {
+    delete process.env.CI
+    logCore('info', 'removed CI env var to allow settings file auth')
+  }
+
   const { init } = await import('src/entrypoints/init.js')
   await init()
   logCore('info', 'startup init_complete')

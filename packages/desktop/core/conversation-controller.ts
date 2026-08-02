@@ -39,6 +39,17 @@ function isFirstEventTimeout(error: unknown): boolean {
   return error instanceof Error && error.message.startsWith('Timed out waiting for the model to start responding')
 }
 
+const DEFAULT_SESSION_TITLE = 'New conversation'
+const MAX_TITLE_LENGTH = 48
+
+/** Builds a sidebar title from the user's first prompt by collapsing whitespace and truncating. */
+function deriveTitleFromPrompt(prompt: string): string {
+  const trimmed = prompt.trim().replace(/\s+/g, ' ')
+  if (!trimmed) return DEFAULT_SESSION_TITLE
+  if (trimmed.length <= MAX_TITLE_LENGTH) return trimmed
+  return `${trimmed.slice(0, MAX_TITLE_LENGTH)}…`
+}
+
 /** Owns desktop session state while delegating model/tool work to query(). */
 export class DesktopConversationController {
   private readonly sessions = new Map<string, DesktopSession>()
@@ -61,7 +72,7 @@ export class DesktopConversationController {
     const id = this.createId()
     const session: DesktopSession = {
       id,
-      title: title ?? 'New conversation',
+      title: title ?? DEFAULT_SESSION_TITLE,
       cwd,
       updatedAt: this.now(),
       model: this.options.defaultModel,
@@ -106,6 +117,10 @@ export class DesktopConversationController {
 
     const abortController = new AbortController()
     this.activeGeneration = { sessionId, abortController }
+    if (session.title === DEFAULT_SESSION_TITLE) {
+      session.title = deriveTitleFromPrompt(prompt)
+      this.emitSnapshot(session)
+    }
     const userMessage = {
       id: `${sessionId}-user-${session.sequence + 1}`,
       role: 'user' as const,

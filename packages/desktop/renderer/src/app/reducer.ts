@@ -15,6 +15,16 @@ export type DesktopRendererAction =
       state: RendererSession['generationState']
     }
   | {
+      type: 'renderer.localModeChanged'
+      sessionId: string
+      mode: RendererSession['mode']
+    }
+  | {
+      type: 'renderer.permissionResolved'
+      sessionId: string
+      permissionId: string
+    }
+  | {
       type: 'renderer.clearError'
     }
 
@@ -348,6 +358,41 @@ export function desktopReducer(
           [event.sessionId]: {
             ...session,
             generationState: event.state,
+          },
+        },
+      }
+    }
+    case 'renderer.localModeChanged': {
+      const session = state.sessions[event.sessionId]
+      if (!session) return state
+      return {
+        ...state,
+        sessions: {
+          ...state.sessions,
+          [event.sessionId]: {
+            ...session,
+            mode: event.mode,
+          },
+        },
+      }
+    }
+    case 'renderer.permissionResolved': {
+      const session = state.sessions[event.sessionId]
+      if (!session) return state
+      const permissionOrder = session.permissionOrder.filter(
+        id => id !== event.permissionId,
+      )
+      const permissions = Object.fromEntries(
+        permissionOrder.map(id => [id, session.permissions[id]!]),
+      )
+      return {
+        ...state,
+        sessions: {
+          ...state.sessions,
+          [event.sessionId]: {
+            ...session,
+            permissions,
+            permissionOrder,
           },
         },
       }

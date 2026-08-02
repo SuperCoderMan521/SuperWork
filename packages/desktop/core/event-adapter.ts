@@ -94,6 +94,17 @@ function assistantTextSignature(content: string): string {
   return content.replace(/\s+/g, '')
 }
 
+function agentMetadata(value: UnknownRecord): Pick<DesktopToolCall, 'agentId' | 'agentName' | 'teamName'> {
+  const agentId = stringProperty(value, 'agent_id') ?? stringProperty(value, 'agentId')
+  const agentName = stringProperty(value, 'agent_name') ?? stringProperty(value, 'agentName')
+  const teamName = stringProperty(value, 'team_name') ?? stringProperty(value, 'teamName')
+  return {
+    ...(agentId ? { agentId } : {}),
+    ...(agentName ? { agentName } : {}),
+    ...(teamName ? { teamName } : {}),
+  }
+}
+
 /** Converts unstable query stream shapes into the stable desktop protocol. */
 export class DesktopEventAdapter {
   private sequence = 0
@@ -191,6 +202,7 @@ export class DesktopEventAdapter {
           input,
           startedAt: this.now(),
           displayOrder: this.displayOrderForBlock(index, baseDisplayOrder),
+          ...agentMetadata(value),
         }
         this.tools.set(id, tool)
         return [this.sessionEvent({ type: 'tool.updated', tool })]

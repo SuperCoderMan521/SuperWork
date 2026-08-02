@@ -92,6 +92,8 @@ export type {
   OnMessageCallback,
   PermissionResponse,
   OnPermissionResponseCallback,
+  PairingRequired,
+  OnPairingRequiredCallback,
 } from './monitor.js'
 
 // Permission state

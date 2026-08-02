@@ -3,7 +3,10 @@ import type { DesktopEvent } from '../shared/protocol.js'
 import { DesktopCommandDispatcher } from './command-dispatcher.js'
 import { DesktopConversationController } from './conversation-controller.js'
 import { DesktopConfigService } from './desktop-config-service.js'
-import { DesktopQueryRunner } from './desktop-query-runner.js'
+import {
+  createDesktopLeaderPermissionHandler,
+  DesktopQueryRunner,
+} from './desktop-query-runner.js'
 import { runCoreProtocol } from './entry.js'
 import { testModelConnection } from './model-connection-test.js'
 import { PermissionBroker } from './permission-broker.js'
@@ -12,7 +15,12 @@ import { DesktopBuddyService } from './buddy-service.js'
 import { DesktopPerformanceService } from './performance-service.js'
 import { DesktopAgentMailboxService } from './agent-mailbox-service.js'
 import { DesktopScheduledTasksService } from './scheduled-tasks-service.js'
+import { DesktopWeixinChannelService } from './weixin-channel-service.js'
 import { copyLegacyDesktopTranscripts } from './legacy-session-migration.js'
+import {
+  registerLeaderPermissionHandler,
+  unregisterLeaderPermissionHandler,
+} from 'src/utils/swarm/leaderPermissionBridge.js'
 
 /**
  * Writes a leveled log line to stderr so it never pollutes the JSON Lines
@@ -91,6 +99,9 @@ async function main(): Promise<void> {
     emit: (request, sessionId) =>
       controller?.emitPermissionRequest(sessionId, request),
   })
+  registerLeaderPermissionHandler(
+    createDesktopLeaderPermissionHandler({ permissionBroker }),
+  )
   const queryRunner = new DesktopQueryRunner(
     permissionBroker,
     sessionId => sessionService.rawMessages(sessionId),
@@ -103,6 +114,7 @@ async function main(): Promise<void> {
   )
   const agentMailbox = new DesktopAgentMailboxService()
   const scheduledTasks = new DesktopScheduledTasksService()
+  const weixinChannel = new DesktopWeixinChannelService(emit)
   controller = new DesktopConversationController({
     runQuery: input => queryRunner.run(input),
     emit,
@@ -110,7 +122,7 @@ async function main(): Promise<void> {
     defaultMode: 'default',
     getModelConfig: cwd => configService.modelConfig(cwd),
     onInterrupt: sessionId => {
-      permissionBroker.cancelSession(sessionId)
+      permissionBroker.closeSession(sessionId)
     },
   })
 
@@ -146,6 +158,14 @@ async function main(): Promise<void> {
       controller?.restoreSession(snapshot)
     },
     deleteSession: async sessionId => {
+      const killedTeammates = queryRunner.cleanupSession(sessionId)
+      if (killedTeammates > 0) {
+        logCore(
+          'info',
+          `session.delete cleaned in-process teammates session=${sessionId} count=${killedTeammates}`,
+        )
+      }
+      permissionBroker.cancelSession(sessionId)
       controller?.deleteSession(sessionId)
       const transcriptPath = sessionService.transcriptPathForDelete(
         sessionId,
@@ -162,7 +182,16 @@ async function main(): Promise<void> {
       applyConfigEnvironmentVariables()
       return snapshot
     },
+    setAutoMemoryEnabled: (cwd, enabled) =>
+      configService.setAutoMemoryEnabled(cwd, enabled),
     testConfig: modelConfig => testModelConnection(modelConfig),
+    loginWeixinChannel: (cwd, onStatus) =>
+      configService.startWeixinLogin(cwd, onStatus),
+    clearWeixinChannel: cwd => configService.clearWeixinLogin(cwd),
+    startWeixinChannel: (_cwd, requestId) => weixinChannel.start(requestId),
+    getWeixinChannel: () => weixinChannel.snapshot(),
+    stopWeixinChannel: () => weixinChannel.stop('微信登录已清除'),
+    importSkill: (cwd, sourcePath) => configService.importSkill(cwd, sourcePath),
     readFile: (path, cwd) => configService.readFile(path, cwd),
     writeFile: (path, content, cwd) => configService.writeFile(path, content, cwd),
     readMemory: path => configService.readMemory(path),
@@ -170,7 +199,10 @@ async function main(): Promise<void> {
     compactMemory: (path, content) => configService.compactMemory(path, content),
     emit,
     shutdown: async () => {
-      permissionBroker.cancelAll()
+      unregisterLeaderPermissionHandler()
+      weixinChannel.stop()
+      queryRunner.cleanupAll()
+      permissionBroker.closeAll()
       await storageModule.flushSessionStorage()
     },
     buddy,

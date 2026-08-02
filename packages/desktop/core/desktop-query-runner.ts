@@ -1,13 +1,18 @@
 import type { CanUseToolFn } from 'src/hooks/useCanUseTool.js'
 import type { QueryEngine } from 'src/QueryEngine.js'
 import type { AppState } from 'src/state/AppStateStore.js'
+import { isInProcessTeammateTask } from 'src/tasks/InProcessTeammateTask/types.js'
 import type { Command } from 'src/types/command.js'
 import type { PermissionDecision as CorePermissionDecision } from 'src/types/permissions.js'
 import type { Message } from 'src/types/message.js'
 import { hasPermissionsToUseTool } from 'src/utils/permissions/permissions.js'
+import { killInProcessTeammate } from 'src/utils/swarm/spawnInProcess.js'
 import type { PermissionDecision } from '../shared/protocol.js'
 import type { QueryRunInput } from './conversation-controller.js'
 import { PermissionBroker } from './permission-broker.js'
+import type {
+  LeaderPermissionHandler,
+} from 'src/utils/swarm/leaderPermissionBridge.js'
 
 export function toCorePermissionDecision(
   decision: PermissionDecision,
@@ -111,6 +116,29 @@ type EngineState = {
   engine: QueryEngine
   appState: AppState
   commands: Command[]
+  teammateMirroredMessageKeys: Set<string>
+  teammateMirroredStatuses: Map<string, string>
+}
+
+type KillTeammateFn = (
+  taskId: string,
+  setAppState: (updater: (prev: AppState) => AppState) => void,
+) => boolean
+
+export function cleanupInProcessTeammatesForSession(
+  sessionId: string,
+  appState: AppState,
+  setAppState: (updater: (prev: AppState) => AppState) => void,
+  killTeammate: KillTeammateFn = killInProcessTeammate,
+): number {
+  let killed = 0
+  for (const [taskId, task] of Object.entries(appState.tasks)) {
+    if (!isInProcessTeammateTask(task)) continue
+    if (task.identity.parentSessionId !== sessionId) continue
+    if (task.status !== 'running') continue
+    if (killTeammate(taskId, setAppState)) killed += 1
+  }
+  return killed
 }
 
 export type DesktopSessionBootstrap = {
@@ -168,6 +196,7 @@ export function createDesktopCanUseTool({
       summary,
       input: toolInput,
       allowSession: !interactive,
+      permissionSuggestions: pipelineDecision.suggestions,
     })
     if (decision === 'allow_session') {
       const existing =
@@ -190,6 +219,50 @@ export function createDesktopCanUseTool({
   }
 }
 
+export function createDesktopLeaderPermissionHandler({
+  permissionBroker,
+}: {
+  permissionBroker: PermissionBroker
+}): LeaderPermissionHandler {
+  return async request => {
+    const interactive = request.tool.requiresUserInteraction?.() === true
+    const { decision, payload } = await permissionBroker.request({
+      sessionId: request.identity.parentSessionId,
+      toolCallId: request.toolUseID,
+      toolName: request.tool.name,
+      summary: request.description || request.permissionResult.message || request.tool.name,
+      input: request.input,
+      allowSession: !interactive,
+      agentId: request.identity.agentId,
+      agentName: request.identity.agentName,
+      teamName: request.identity.teamName,
+      permissionSuggestions: request.permissionResult.suggestions,
+    })
+
+    if (decision === 'allow_session') {
+      const state = request.toolUseContext.getAppState()
+      const existing = state.toolPermissionContext.alwaysAllowRules.session ?? []
+      if (!existing.includes(request.tool.name)) {
+        request.toolUseContext.setAppState(prev => ({
+          ...prev,
+          toolPermissionContext: {
+            ...prev.toolPermissionContext,
+            alwaysAllowRules: {
+              ...prev.toolPermissionContext.alwaysAllowRules,
+              session: [...existing, request.tool.name],
+            },
+          },
+        }))
+      }
+    }
+
+    return toCorePermissionDecision(
+      decision,
+      mergeInteractivePayload(request.tool.name, request.input, payload),
+    )
+  }
+}
+
 function parseSlashName(prompt: string): string | null {
   const trimmed = prompt.trim()
   if (!trimmed.startsWith('/')) return null
@@ -199,6 +272,55 @@ function parseSlashName(prompt: string): string | null {
 
 function commandDisplayName(command: Command): string {
   return command.userFacingName?.() || command.name
+}
+
+function mirrorTeammateMessages(state: EngineState): unknown[] {
+  const events: unknown[] = []
+  for (const [taskId, task] of Object.entries(state.appState.tasks)) {
+    if (!isInProcessTeammateTask(task)) continue
+    const statusKey = `${task.status}:${task.isIdle ? 'idle' : 'active'}`
+    if (state.teammateMirroredStatuses.get(taskId) !== statusKey) {
+      state.teammateMirroredStatuses.set(taskId, statusKey)
+      events.push({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: `desktop-agent-status-${taskId}`,
+            name: 'Agent',
+            input: {
+              name: task.identity.agentName,
+              team_name: task.identity.teamName,
+              subagent_type: task.selectedAgent?.agentType ?? 'general-purpose',
+              desktop_status: task.status,
+              desktop_idle: task.isIdle,
+            },
+          }],
+        },
+        uuid: `${task.identity.agentId}:desktop-status:${statusKey}`,
+        agent_id: task.identity.agentId,
+        agent_name: task.identity.agentName,
+        team_name: task.identity.teamName,
+      })
+    }
+    const messages = task.messages ?? []
+    for (let index = 0; index < messages.length; index++) {
+      const message = messages[index]
+      if (!message || (message.type !== 'assistant' && message.type !== 'user')) continue
+      const key = `${taskId}:${message.uuid ?? index}:${message.type}`
+      if (state.teammateMirroredMessageKeys.has(key)) continue
+      state.teammateMirroredMessageKeys.add(key)
+      events.push({
+        type: message.type,
+        message: message.message,
+        uuid: `${task.identity.agentId}:${message.uuid ?? index}`,
+        agent_id: task.identity.agentId,
+        agent_name: task.identity.agentName,
+        team_name: task.identity.teamName,
+      })
+    }
+  }
+  return events
 }
 
 export function desktopSlashFallback(prompt: string, commands: readonly Command[]): string | null {
@@ -265,6 +387,43 @@ export async function nextResultWithTimeout<T>(
   }
 }
 
+type NextWithMirrorOptions = {
+  mirrorIntervalMs: number
+  timeoutMs?: number
+  onTimeout?: () => void
+  timeoutMessage?: string
+}
+
+export async function* nextResultWithMirrorTicks<T>(
+  next: () => Promise<IteratorResult<T>>,
+  mirror: () => Iterable<unknown>,
+  options: NextWithMirrorOptions,
+): AsyncGenerator<unknown, IteratorResult<T>> {
+  const nextPromise = next().then(result => ({ kind: 'next' as const, result }))
+  const timeoutPromise = options.timeoutMs === undefined
+    ? undefined
+    : new Promise<{ kind: 'timeout' }>(resolve => {
+        setTimeout(() => resolve({ kind: 'timeout' }), options.timeoutMs)
+      })
+
+  while (true) {
+    const tickPromise = new Promise<{ kind: 'tick' }>(resolve => {
+      setTimeout(() => resolve({ kind: 'tick' }), options.mirrorIntervalMs)
+    })
+    const winner = await Promise.race(
+      timeoutPromise
+        ? [nextPromise, tickPromise, timeoutPromise]
+        : [nextPromise, tickPromise],
+    )
+    if (winner.kind === 'next') return winner.result
+    if (winner.kind === 'timeout') {
+      options.onTimeout?.()
+      throw new Error(options.timeoutMessage ?? 'Timed out waiting for the model to start responding')
+    }
+    for (const event of mirror()) yield event
+  }
+}
+
 /** Lazily creates one existing QueryEngine per desktop session. */
 export class DesktopQueryRunner {
   private readonly engines = new Map<string, EngineState>()
@@ -273,6 +432,27 @@ export class DesktopQueryRunner {
     private readonly permissionBroker: PermissionBroker,
     private readonly loadInitialMessages: (sessionId: string) => unknown[] = () => [],
   ) {}
+
+  cleanupSession(sessionId: string): number {
+    const state = this.engines.get(sessionId)
+    if (!state) return 0
+    state.engine.interrupt()
+    const killed = cleanupInProcessTeammatesForSession(
+      sessionId,
+      state.appState,
+      updater => Object.assign(state.appState, updater(state.appState)),
+    )
+    this.engines.delete(sessionId)
+    return killed
+  }
+
+  cleanupAll(): number {
+    let killed = 0
+    for (const sessionId of [...this.engines.keys()]) {
+      killed += this.cleanupSession(sessionId)
+    }
+    return killed
+  }
 
   async *run(input: QueryRunInput): AsyncGenerator<unknown> {
     console.error(`[desktop-core] query.start session=${input.session.id}`)
@@ -301,23 +481,42 @@ export class DesktopQueryRunner {
       const iterator = state.engine.submitMessage(input.prompt)[Symbol.asyncIterator]()
       let isFirstResult = true
       while (true) {
-        const next = isFirstResult
-          ? await nextResultWithTimeout(
-              () => iterator.next(),
-              45_000,
-              () => {
+        const mirroredIterator = nextResultWithMirrorTicks(
+          () => iterator.next(),
+          () => mirrorTeammateMessages(state),
+          {
+            mirrorIntervalMs: 250,
+            ...(isFirstResult ? {
+              timeoutMs: 45_000,
+              onTimeout: () => {
                 console.error(`[desktop-core] query.first_event_timeout session=${input.session.id}`)
                 state.engine.interrupt()
               },
-              'Timed out waiting for the model to start responding. Check provider base URL, token, model name, and network connectivity.',
-            )
-          : await iterator.next()
+              timeoutMessage: 'Timed out waiting for the model to start responding. Check provider base URL, token, model name, and network connectivity.',
+            } : {}),
+          },
+        )[Symbol.asyncIterator]()
+        let next: IteratorResult<unknown>
+        while (true) {
+          const mirrored = await mirroredIterator.next()
+          if (mirrored.done) {
+            next = mirrored.value
+            break
+          }
+          yield mirrored.value
+        }
         if (isFirstResult) {
           console.error(`[desktop-core] query.first_event session=${input.session.id}`)
         }
         isFirstResult = false
         if (next.done) break
         yield next.value
+        for (const teammateEvent of mirrorTeammateMessages(state)) {
+          yield teammateEvent
+        }
+      }
+      for (const teammateEvent of mirrorTeammateMessages(state)) {
+        yield teammateEvent
       }
       console.error(`[desktop-core] query.done session=${input.session.id}`)
     } catch (error) {
@@ -378,7 +577,13 @@ export class DesktopQueryRunner {
       userSpecifiedModel: input.session.model,
       initialMessages: this.loadInitialMessages(input.session.id) as unknown as Message[],
     })
-    const state = { engine, appState, commands }
+    const state = {
+      engine,
+      appState,
+      commands,
+      teammateMirroredMessageKeys: new Set<string>(),
+      teammateMirroredStatuses: new Map<string, string>(),
+    }
     this.engines.set(input.session.id, state)
     return state
   }

@@ -5,6 +5,7 @@ import {
   DESKTOP_DIAGNOSTICS_GET_CHANNEL,
   DESKTOP_EVENT_CHANNEL,
   DESKTOP_LOG_FOLDER_OPEN_CHANNEL,
+  DESKTOP_SKILL_SOURCE_SELECT_CHANNEL,
   DESKTOP_WORKSPACE_SELECT_CHANNEL,
   DESKTOP_WORKSPACE_EDITORS_LIST_CHANNEL,
   DESKTOP_WORKSPACE_EDITOR_OPEN_CHANNEL,
@@ -26,6 +27,8 @@ const api = createDesktopApi(
     get: () => ipcRenderer.invoke(DESKTOP_DIAGNOSTICS_GET_CHANNEL),
     openFolder: () => ipcRenderer.invoke(DESKTOP_LOG_FOLDER_OPEN_CHANNEL),
     selectWorkspace: () => ipcRenderer.invoke(DESKTOP_WORKSPACE_SELECT_CHANNEL),
+    selectSkillSource: kind =>
+      ipcRenderer.invoke(DESKTOP_SKILL_SOURCE_SELECT_CHANNEL, { kind }),
     listWorkspaceEditors: refresh =>
       ipcRenderer.invoke(DESKTOP_WORKSPACE_EDITORS_LIST_CHANNEL, { refresh }),
     openWorkspaceInEditor: (editorId, workspace) =>

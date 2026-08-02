@@ -1,16 +1,21 @@
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { promisify } from 'node:util'
 import { extractPathCandidates, looksLikeFilePath } from '../shared/file-paths.js'
 import type {
   DesktopConfigItem,
   DesktopConfigSnapshot,
+  DesktopChannelWeixinSnapshot,
   DesktopFileEntry,
   DesktopMemoryFile,
   DesktopModelConfig,
   DesktopToolCall,
 } from '../shared/protocol.js'
+
+const execFileAsync = promisify(execFile)
 
 function claudeHome(): string {
   return process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
@@ -18,6 +23,14 @@ function claudeHome(): string {
 
 function desktopConfigPrimaryPath(cwd: string): string {
   return join(cwd, '.claudecode', 'setting.json')
+}
+
+function userClaudeSkillsDir(): string {
+  return join(claudeHome(), 'skills')
+}
+
+function weixinStateDir(): string {
+  return process.env.WEIXIN_STATE_DIR || join(claudeHome(), 'channels', 'weixin')
 }
 
 function desktopConfigLegacyPaths(cwd: string): string[] {
@@ -128,36 +141,102 @@ export function compactMemoryContent(content: string): string {
     : compacted
 }
 
-async function listDirectoryItems(
-  directory: string,
-  description: string,
-): Promise<DesktopConfigItem[]> {
-  try {
-    const items = await readdir(directory, { withFileTypes: true })
-    return items
-      .filter(item => item.isDirectory() || item.isFile())
-      .slice(0, 100)
-      .map(item => ({
-        id: join(directory, item.name),
-        name: item.name,
-        description,
-        enabled: true,
-        path: join(directory, item.name),
-      }))
-  } catch {
-    return []
-  }
+function frontmatterValue(content: string, key: string): string | undefined {
+  const frontmatter = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)
+  const body = frontmatter?.[1]
+  if (!body) return undefined
+  const match = body.match(new RegExp(`^${key}:\\s*(.+?)\\s*$`, 'm'))
+  const value = match?.[1]?.trim().replace(/^['"]|['"]$/g, '')
+  return value && value.length > 0 ? value : undefined
 }
 
-async function listExistingDirectoryItems(
+async function listSkillDirectoryItems(
   directories: Array<{ path: string; description: string }>,
 ): Promise<DesktopConfigItem[]> {
-  const nested = await Promise.all(
-    directories.map(directory =>
-      listDirectoryItems(directory.path, directory.description),
-    ),
-  )
-  return nested.flat()
+  const skills: DesktopConfigItem[] = []
+  const seen = new Set<string>()
+
+  async function scan(root: string, description: string, depth = 0): Promise<void> {
+    if (depth > 4) return
+    const items = await readdir(root, { withFileTypes: true }).catch(() => [])
+    const hasSkillFile = items.some(item => item.isFile() && item.name.toLowerCase() === 'skill.md')
+    if (hasSkillFile) {
+      const skillFile = join(root, 'SKILL.md')
+      const content = await readFile(skillFile, 'utf8').catch(() => '')
+      const name = frontmatterValue(content, 'name') ??
+        root.split(/[\\/]/).filter(Boolean).at(-1) ??
+        root
+      if (!seen.has(root)) {
+        seen.add(root)
+        skills.push({
+          id: root,
+          name,
+          description: frontmatterValue(content, 'description') ?? description,
+          enabled: true,
+          path: root,
+        })
+      }
+      return
+    }
+    for (const item of items.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (!item.isDirectory()) continue
+      await scan(join(root, item.name), description, depth + 1)
+    }
+  }
+
+  for (const directory of directories) {
+    await scan(directory.path, directory.description)
+  }
+  return skills
+}
+
+function safeSkillDirectoryName(name: string): string {
+  const normalized = name
+    .trim()
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || 'imported-skill'
+}
+
+async function findSkillRoot(root: string, depth = 0): Promise<string | null> {
+  if (depth > 4) return null
+  const items = await readdir(root, { withFileTypes: true }).catch(() => [])
+  if (items.some(item => item.isFile() && item.name.toLowerCase() === 'skill.md')) {
+    return root
+  }
+  for (const item of items.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!item.isDirectory()) continue
+    const match = await findSkillRoot(join(root, item.name), depth + 1)
+    if (match) return match
+  }
+  return null
+}
+
+async function nextAvailableDirectory(parent: string, preferredName: string): Promise<string> {
+  let candidate = join(parent, preferredName)
+  let index = 2
+  while (existsSync(candidate)) {
+    candidate = join(parent, `${preferredName}-${index}`)
+    index += 1
+  }
+  return candidate
+}
+
+async function expandZipArchive(sourcePath: string, destination: string): Promise<void> {
+  if (process.platform === 'win32') {
+    await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      'Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force',
+      sourcePath,
+      destination,
+    ])
+    return
+  }
+  await execFileAsync('unzip', ['-q', sourcePath, '-d', destination])
 }
 
 function stringFromRecord(input: Record<string, unknown>, key: string): string | undefined {
@@ -211,6 +290,34 @@ async function readJsonObject(path: string): Promise<Record<string, unknown>> {
     return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
   } catch {
     return {}
+  }
+}
+
+async function readWeixinChannelSnapshot(): Promise<DesktopChannelWeixinSnapshot> {
+  const stateDir = weixinStateDir()
+  const accountPath = join(stateDir, 'account.json')
+  const accessPath = join(stateDir, 'access.json')
+  const cursorPath = join(stateDir, 'cursor.txt')
+  const pendingPath = join(stateDir, 'pending-pairings.json')
+  const account = await readJsonObject(accountPath)
+  const access = await readJsonObject(accessPath)
+  const pending = await readJsonObject(pendingPath)
+  const allowFrom = Array.isArray(access.allowFrom)
+    ? access.allowFrom.filter(value => typeof value === 'string')
+    : []
+
+  return {
+    connected: typeof account.token === 'string' && account.token.length > 0,
+    stateDir,
+    accountPath,
+    accessPath,
+    cursorPath,
+    baseUrl: typeof account.baseUrl === 'string' ? account.baseUrl : undefined,
+    userId: typeof account.userId === 'string' ? account.userId : undefined,
+    savedAt: typeof account.savedAt === 'string' ? account.savedAt : undefined,
+    allowedUsers: allowFrom.length,
+    pendingPairings: Object.keys(pending).length,
+    cursorPresent: existsSync(cursorPath),
   }
 }
 
@@ -310,6 +417,9 @@ async function discoverMcpServers(cwd: string): Promise<DesktopConfigItem[]> {
     join(cwd, '.claude', 'settings.json'),
     join(cwd, '.claude', 'settings.local.json'),
     join(claudeHome(), 'settings.json'),
+    join(homedir(), '.codex', 'settings.json'),
+    join(homedir(), '.codex', 'mcp.json'),
+    join(homedir(), '.agents', 'settings.json'),
   ]
   const servers: DesktopConfigItem[] = []
   for (const file of files) {
@@ -419,14 +529,16 @@ export class DesktopConfigService {
 
   async snapshot(cwd: string): Promise<DesktopConfigSnapshot> {
     const autoMemoryPath = await this.getAutoMemoryPath()
-    const [skills, mcpServers, plugins, modelConfig, autoMemoryFiles] = await Promise.all([
-      listExistingDirectoryItems([
+    const [skills, mcpServers, plugins, modelConfig, autoMemoryFiles, weixin] = await Promise.all([
+      listSkillDirectoryItems([
         { path: join(cwd, '.agents', 'skills'), description: 'Project skill' },
         { path: join(cwd, '.claude', 'skills'), description: 'Project Claude skill' },
         { path: join(cwd, '.claudecode', 'skills'), description: 'Project ClaudeCode skill' },
         { path: join(cwd, '.codex', 'skills'), description: 'Project Codex skill' },
         { path: join(claudeHome(), 'skills'), description: 'User Claude skill' },
         { path: join(claudeHome(), '..', '.codex', 'skills'), description: 'User Codex skill' },
+        { path: join(homedir(), '.codex', 'skills'), description: 'User Codex skill' },
+        { path: join(homedir(), '.agents', 'skills'), description: 'User agent skill' },
       ]),
       discoverMcpServers(cwd),
       listPluginDirectoryItems([
@@ -436,15 +548,120 @@ export class DesktopConfigService {
       ]),
       this.readModelConfig(cwd),
       discoverAutoMemoryFiles(autoMemoryPath),
+      readWeixinChannelSnapshot(),
     ])
+    const autoMemoryEnabled = await this.readAutoMemoryEnabled(cwd)
     return {
       cwd,
       skills,
       mcpServers,
       plugins,
       memoryFiles: [...memoryFilesForCwd(cwd), ...autoMemoryFiles],
+      autoMemory: {
+        enabled: autoMemoryEnabled,
+        path: autoMemoryPath,
+      },
       modelConfig,
+      channel: {
+        weixin,
+      },
     }
+  }
+
+  async setAutoMemoryEnabled(
+    cwd: string,
+    enabled: boolean,
+  ): Promise<DesktopConfigSnapshot> {
+    const settingsPath = desktopConfigPrimaryPath(cwd)
+    const settings = await readJsonObject(settingsPath)
+    settings.autoMemoryEnabled = enabled
+    await writeJsonObject(settingsPath, settings)
+    for (const legacyPath of desktopConfigLegacyPaths(cwd)) {
+      const legacy = await readJsonObject(legacyPath)
+      legacy.autoMemoryEnabled = enabled
+      await writeJsonObject(legacyPath, legacy)
+    }
+    return this.snapshot(cwd)
+  }
+
+  async startWeixinLogin(
+    cwd: string,
+    onStatus: (event: {
+      status: 'starting' | 'qr' | 'waiting' | 'connected' | 'failed'
+      message: string
+      qrcodeUrl?: string
+      qrcodeId?: string
+    }) => void,
+  ): Promise<DesktopConfigSnapshot> {
+    const {
+      DEFAULT_BASE_URL,
+      saveAccount,
+      startLogin,
+      waitForLogin,
+    } = await import('@claude-code-best/weixin')
+    const { toDataURL } = await import('qrcode')
+    onStatus({ status: 'starting', message: '正在请求微信扫码登录二维码…' })
+    const qr = await startLogin(DEFAULT_BASE_URL)
+    const qrImageUrl = qr.qrcodeUrl
+      ? await toDataURL(qr.qrcodeUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 2,
+          width: 220,
+        })
+      : undefined
+    onStatus({
+      status: 'qr',
+      message: '请使用微信扫码确认登录。',
+      qrcodeUrl: qrImageUrl ?? qr.qrcodeUrl,
+      qrcodeId: qr.qrcodeId,
+    })
+    onStatus({
+      status: 'waiting',
+      message: '已生成二维码，等待微信确认…',
+      qrcodeUrl: qrImageUrl ?? qr.qrcodeUrl,
+      qrcodeId: qr.qrcodeId,
+    })
+    const result = await waitForLogin({
+      qrcodeId: qr.qrcodeId,
+      apiBaseUrl: DEFAULT_BASE_URL,
+    })
+    if (!result.connected || !result.token) {
+      onStatus({ status: 'failed', message: result.message || '微信登录失败。' })
+      throw new Error(result.message || 'Weixin login failed')
+    }
+    saveAccount({
+      token: result.token,
+      baseUrl: result.baseUrl || DEFAULT_BASE_URL,
+      userId: result.userId,
+      savedAt: new Date().toISOString(),
+    })
+    onStatus({
+      status: 'connected',
+      message: '微信登录成功，已保存本地认证配置。',
+    })
+    return this.snapshot(cwd)
+  }
+
+  async clearWeixinLogin(cwd: string): Promise<DesktopConfigSnapshot> {
+    const { clearAccount } = await import('@claude-code-best/weixin')
+    clearAccount()
+    return this.snapshot(cwd)
+  }
+
+  private async readAutoMemoryEnabled(cwd: string): Promise<boolean> {
+    const settingsPaths = [
+      desktopConfigPrimaryPath(cwd),
+      ...desktopConfigLegacyPaths(cwd),
+      join(claudeHome(), 'settings.json'),
+      join(claudeHome(), 'settings.local.json'),
+    ]
+    for (const settingsPath of settingsPaths) {
+      const loaded = await readJsonObject(settingsPath)
+      if (typeof loaded.autoMemoryEnabled === 'boolean') {
+        return loaded.autoMemoryEnabled
+      }
+    }
+    return true
   }
 
   async writeConfig(
@@ -536,6 +753,51 @@ export class DesktopConfigService {
       file: this.memoryFileFromPath(path, compacted),
       originalCharacters: content.length,
       compactedCharacters: compacted.length,
+    }
+  }
+
+  async importSkill(cwd: string, sourcePath: string): Promise<DesktopConfigSnapshot> {
+    const resolvedSource = resolve(sourcePath)
+    const sourceStat = await stat(resolvedSource)
+    const skillsDir = userClaudeSkillsDir()
+    await mkdir(skillsDir, { recursive: true })
+
+    let cleanupPath: string | null = null
+    let candidateRoot = resolvedSource
+    try {
+      if (sourceStat.isFile()) {
+        if (extname(resolvedSource).toLowerCase() !== '.zip') {
+          throw new Error('请选择包含 SKILL.md 的文件夹，或 .zip 技能包')
+        }
+        cleanupPath = await mkdtemp(join(claudeHome(), 'skill-import-'))
+        await expandZipArchive(resolvedSource, cleanupPath)
+        const extractedSkill = await findSkillRoot(cleanupPath)
+        if (!extractedSkill) {
+          throw new Error('压缩包中没有找到 SKILL.md')
+        }
+        candidateRoot = extractedSkill
+      } else if (!sourceStat.isDirectory()) {
+        throw new Error('请选择包含 SKILL.md 的文件夹，或 .zip 技能包')
+      }
+
+      const skillRoot = sourceStat.isDirectory()
+        ? await findSkillRoot(candidateRoot)
+        : candidateRoot
+      if (!skillRoot) {
+        throw new Error('技能目录中没有找到 SKILL.md')
+      }
+      const skillContent = await readFile(join(skillRoot, 'SKILL.md'), 'utf8')
+      const skillName = frontmatterValue(skillContent, 'name') ?? basename(skillRoot)
+      const destination = await nextAvailableDirectory(
+        skillsDir,
+        safeSkillDirectoryName(skillName),
+      )
+      await cp(skillRoot, destination, { recursive: true, errorOnExist: true })
+      return this.snapshot(cwd)
+    } finally {
+      if (cleanupPath) {
+        await rm(cleanupPath, { recursive: true, force: true }).catch(() => {})
+      }
     }
   }
 

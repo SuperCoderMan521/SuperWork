@@ -26,7 +26,13 @@ export type DesktopApi = {
   setMode(sessionId: string, mode: PermissionMode): void
   getConfig(cwd: string): void
   writeConfig(cwd: string, modelConfig: DesktopModelConfig): void
+  setAutoMemoryEnabled(cwd: string, enabled: boolean): void
   testConfig(cwd: string, modelConfig: DesktopModelConfig): void
+  loginWeixinChannel(cwd: string): void
+  clearWeixinChannel(cwd: string): void
+  startWeixinChannel(cwd: string): void
+  getWeixinChannel(cwd: string): void
+  importSkill(cwd: string, sourcePath: string, allowAutoInstall?: boolean): void
   readFile(path: string, cwd?: string): void
   writeFile(path: string, content: string, cwd?: string): void
   readMemory(path: string): void
@@ -45,6 +51,7 @@ export type DesktopApi = {
   getDiagnostics(): Promise<DiagnosticsSnapshot>
   openLogFolder(): Promise<void>
   selectWorkspace(): Promise<string | null>
+  selectSkillSource(kind: 'zip' | 'folder'): Promise<string | null>
   listWorkspaceEditors(refresh?: boolean): Promise<WorkspaceEditor[]>
   openWorkspaceInEditor(editorId: string, workspace: string): Promise<void>
 }
@@ -53,6 +60,7 @@ type DiagnosticsApi = {
   get: () => Promise<DiagnosticsSnapshot>
   openFolder: () => Promise<void>
   selectWorkspace?: () => Promise<string | null>
+  selectSkillSource?: (kind: 'zip' | 'folder') => Promise<string | null>
   listWorkspaceEditors?: (refresh: boolean) => Promise<WorkspaceEditor[]>
   openWorkspaceInEditor?: (editorId: string, workspace: string) => Promise<void>
 }
@@ -112,8 +120,26 @@ export function createDesktopApi(
       send({ type: 'config.get', requestId: request(), cwd }),
     writeConfig: (cwd, modelConfig) =>
       send({ type: 'config.write', requestId: request(), cwd, modelConfig }),
+    setAutoMemoryEnabled: (cwd, enabled) =>
+      send({ type: 'config.autoMemory.set', requestId: request(), cwd, enabled }),
     testConfig: (cwd, modelConfig) =>
       send({ type: 'config.test', requestId: request(), cwd, modelConfig }),
+    loginWeixinChannel: cwd =>
+      send({ type: 'channel.weixin.login', requestId: request(), cwd }),
+    clearWeixinChannel: cwd =>
+      send({ type: 'channel.weixin.clear', requestId: request(), cwd }),
+    startWeixinChannel: cwd =>
+      send({ type: 'channel.weixin.start', requestId: request(), cwd }),
+    getWeixinChannel: cwd =>
+      send({ type: 'channel.weixin.get', requestId: request(), cwd }),
+    importSkill: (cwd, sourcePath, allowAutoInstall) =>
+      send({
+        type: 'skill.import',
+        requestId: request(),
+        cwd,
+        sourcePath,
+        allowAutoInstall,
+      }),
     readFile: (path, cwd) =>
       send({ type: 'file.read', requestId: request(), path, cwd }),
     writeFile: (path, content, cwd) =>
@@ -137,6 +163,8 @@ export function createDesktopApi(
     getDiagnostics: diagnostics.get,
     openLogFolder: diagnostics.openFolder,
     selectWorkspace: diagnostics.selectWorkspace ?? (() => Promise.resolve(null)),
+    selectSkillSource: kind =>
+      diagnostics.selectSkillSource?.(kind) ?? Promise.resolve(null),
     listWorkspaceEditors: refresh =>
       diagnostics.listWorkspaceEditors?.(Boolean(refresh)) ?? Promise.resolve([]),
     openWorkspaceInEditor: (editorId, workspace) =>

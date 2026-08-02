@@ -72,6 +72,49 @@ describe('extractFileEntriesFromTools', () => {
   })
 })
 
+describe('DesktopConfigService skill import', () => {
+  test('copies a skill folder into the Claude skills directory and refreshes the snapshot', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'superwork-skill-import-cwd-'))
+    const claudeDir = await mkdtemp(join(tmpdir(), 'superwork-claude-home-'))
+    const source = await mkdtemp(join(tmpdir(), 'superwork-skill-source-'))
+    const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = claudeDir
+    try {
+      await writeFile(
+        join(source, 'SKILL.md'),
+        [
+          '---',
+          'name: imported-review',
+          'description: Imported review skill',
+          '---',
+          '',
+          '# Imported Review',
+        ].join('\n'),
+        'utf8',
+      )
+      const service = new DesktopConfigService({ getAutoMemoryPath: () => join(cwd, 'MEMORY.md') })
+
+      const snapshot = await service.importSkill(cwd, source)
+
+      expect(await readFile(join(claudeDir, 'skills', 'imported-review', 'SKILL.md'), 'utf8'))
+        .toContain('Imported Review')
+      expect(snapshot.skills.some(skill =>
+        skill.name === 'imported-review' &&
+        skill.path === join(claudeDir, 'skills', 'imported-review')
+      )).toBe(true)
+    } finally {
+      if (previousClaudeConfigDir === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      }
+      await rm(cwd, { recursive: true, force: true })
+      await rm(claudeDir, { recursive: true, force: true })
+      await rm(source, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('DesktopConfigService.writeConfig', () => {
   test('persists OpenAI-compatible model config where Claude Code reads it', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'superwork-config-'))
@@ -144,9 +187,76 @@ describe('DesktopConfigService.writeConfig', () => {
       await rm(cwd, { recursive: true, force: true })
     }
   })
+
+  test('persists auto memory enabled setting where Claude Code reads it', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'superwork-memory-config-'))
+    const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = join(cwd, 'home', '.claude')
+    try {
+      const service = new DesktopConfigService({
+        getAutoMemoryPath: () => join(cwd, 'home', '.claude', 'projects', 'demo', 'memory'),
+      })
+
+      const snapshot = await service.setAutoMemoryEnabled(cwd, false)
+
+      expect(snapshot.autoMemory.enabled).toBe(false)
+      expect(snapshot.autoMemory.path).toContain('memory')
+      const settings = JSON.parse(
+        await readFile(join(cwd, '.claudecode', 'setting.json'), 'utf8'),
+      ) as Record<string, unknown>
+      expect(settings.autoMemoryEnabled).toBe(false)
+    } finally {
+      if (previousClaudeConfigDir === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      }
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('DesktopConfigService.snapshot plugin discovery', () => {
+  test('lists real skill directories instead of parent category folders', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'superwork-skill-config-'))
+    const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = join(cwd, 'home', '.claude')
+    try {
+      await mkdir(join(cwd, '.codex', 'skills', '.system', 'reviewer'), { recursive: true })
+      await mkdir(join(cwd, '.codex', 'skills', '.system', 'empty-folder'), { recursive: true })
+      await writeFile(
+        join(cwd, '.codex', 'skills', '.system', 'reviewer', 'SKILL.md'),
+        [
+          '---',
+          'name: reviewer',
+          'description: Review code changes carefully',
+          '---',
+          '',
+          '# Reviewer',
+        ].join('\n'),
+        'utf8',
+      )
+
+      const service = new DesktopConfigService({
+        getAutoMemoryPath: () => join(cwd, 'missing-memory'),
+      })
+
+      const snapshot = await service.snapshot(cwd)
+
+      expect(snapshot.skills.map(skill => skill.name)).toContain('reviewer')
+      expect(snapshot.skills.map(skill => skill.name)).not.toContain('.system')
+      expect(snapshot.skills.find(skill => skill.name === 'reviewer')?.description)
+        .toBe('Review code changes carefully')
+    } finally {
+      if (previousClaudeConfigDir === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
+      }
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
+
   test('only lists directories that contain a Claude Code plugin manifest', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'superwork-plugin-config-'))
     const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR

@@ -122,6 +122,15 @@ export type OnPermissionResponseCallback = (
   response: PermissionResponse,
 ) => Promise<void>
 
+export type PairingRequired = {
+  fromUserId: string
+  code: string
+}
+
+export type OnPairingRequiredCallback = (
+  pairing: PairingRequired,
+) => Promise<void>
+
 export function extractPermissionReply(
   text: string,
 ): { requestId: string; behavior: 'allow' | 'deny' } | null {
@@ -139,6 +148,7 @@ export async function startPollLoop(params: {
   token: string
   onMessage: OnMessageCallback
   onPermissionResponse?: OnPermissionResponseCallback
+  onPairingRequired?: OnPairingRequiredCallback
   abortSignal: AbortSignal
 }): Promise<void> {
   const {
@@ -147,6 +157,7 @@ export async function startPollLoop(params: {
     token,
     onMessage,
     onPermissionResponse,
+    onPairingRequired,
     abortSignal,
   } = params
   let cursor = loadCursor()
@@ -185,9 +196,10 @@ export async function startPollLoop(params: {
             baseUrl,
             cdnBaseUrl,
             token,
-            onMessage,
-            onPermissionResponse,
-          })
+          onMessage,
+          onPermissionResponse,
+          onPairingRequired,
+        })
         }
       }
     } catch (error) {
@@ -221,6 +233,7 @@ async function processMessage(
     token: string
     onMessage: OnMessageCallback
     onPermissionResponse?: OnPermissionResponseCallback
+    onPairingRequired?: OnPairingRequiredCallback
   },
 ): Promise<void> {
   if (msg.message_type !== MessageType.USER) return
@@ -233,6 +246,7 @@ async function processMessage(
 
   if (!isAllowed(fromUserId)) {
     const code = addPendingPairing(fromUserId)
+    await ctx.onPairingRequired?.({ fromUserId, code })
     try {
       await sendText({
         to: fromUserId,

@@ -5,6 +5,34 @@ import {
 } from '../renderer/src/app/reducer.js'
 
 describe('desktopReducer', () => {
+  test('optimistically updates the local session permission mode', () => {
+    const state = desktopReducer(createDesktopState(), {
+      type: 'session.snapshot',
+      sessionId: 'session-1',
+      sequence: 1,
+      session: {
+        id: 'session-1',
+        title: 'Conversation',
+        cwd: 'G:/project',
+        updatedAt: 1,
+        model: 'sonnet',
+        mode: 'default',
+        messages: [],
+        tools: [],
+        generationState: 'idle',
+        sequence: 1,
+      },
+    })
+
+    const next = desktopReducer(state, {
+      type: 'renderer.localModeChanged',
+      sessionId: 'session-1',
+      mode: 'auto',
+    })
+
+    expect(next.sessions['session-1']?.mode).toBe('auto')
+  })
+
   test('adds streaming text without rebuilding existing messages', () => {
     const state = createDesktopState()
     const next = desktopReducer(state, {
@@ -443,6 +471,53 @@ describe('desktopReducer', () => {
     })
 
     expect(completed.sessions['session-1']?.permissionOrder).toEqual([])
+  })
+
+  test('removes a resolved permission immediately so queued worker approvals can continue', () => {
+    const first = desktopReducer(createDesktopState(), {
+      type: 'permission.requested',
+      sessionId: 'session-1',
+      sequence: 1,
+      request: {
+        id: 'permission-1',
+        toolCallId: 'tool-worker-1',
+        toolName: 'Write',
+        summary: 'first',
+        input: {},
+        decisions: ['deny', 'allow_once'],
+        agentName: 'architect-lead',
+      },
+    })
+    const queued = desktopReducer(first, {
+      type: 'permission.requested',
+      sessionId: 'session-1',
+      sequence: 2,
+      request: {
+        id: 'permission-2',
+        toolCallId: 'tool-worker-2',
+        toolName: 'Write',
+        summary: 'second',
+        input: {},
+        decisions: ['deny', 'allow_once'],
+        agentName: 'architect-lead',
+      },
+    })
+
+    const resolved = desktopReducer(queued, {
+      type: 'renderer.permissionResolved',
+      sessionId: 'session-1',
+      permissionId: 'permission-1',
+    })
+
+    expect(resolved.sessions['session-1']?.permissionOrder).toEqual([
+      'permission-2',
+    ])
+    expect(
+      resolved.sessions['session-1']?.permissions['permission-1'],
+    ).toBeUndefined()
+    expect(
+      resolved.sessions['session-1']?.permissions['permission-2']?.summary,
+    ).toBe('second')
   })
 
   test('marks the source session failed when a command fails', () => {

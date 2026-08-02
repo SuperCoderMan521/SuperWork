@@ -16,7 +16,7 @@ type SessionSidebarProps = {
   onOpenDiagnostics?: () => void
   disableCreate?: boolean
   onDelete?: (sessionId: string) => void
-  onOpenSettings?: (tab: 'model' | 'skills' | 'mcp' | 'plugins' | 'memory') => void
+  onOpenSettings?: (tab: 'model' | 'skills' | 'mcp' | 'plugins' | 'memory' | 'channel') => void
   onOpenPerformance?: () => void
   onOpenScheduledTasks?: () => void
   buddy?: BuddySnapshot | null
@@ -184,6 +184,10 @@ export function SessionSidebar({
             {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('memory')} aria-label="打开 Memory 配置">
               <span aria-hidden="true">◌</span>
               Memory
+            </button> : null}
+            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('channel')} aria-label="打开 Channel 配置">
+              <span aria-hidden="true">☷</span>
+              Channel
             </button> : null}
           </div>
         ) : null}

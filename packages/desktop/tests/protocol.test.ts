@@ -72,6 +72,48 @@ describe('DesktopCommandSchema', () => {
     ).toBe(true)
   })
 
+  test('accepts Weixin channel login commands', () => {
+    expect(
+      DesktopCommandSchema.safeParse({
+        type: 'channel.weixin.login',
+        requestId: 'request-weixin-login',
+        cwd: 'G:/project',
+      }).success,
+    ).toBe(true)
+    expect(
+      DesktopCommandSchema.safeParse({
+        type: 'channel.weixin.clear',
+        requestId: 'request-weixin-clear',
+        cwd: 'G:/project',
+      }).success,
+    ).toBe(true)
+    expect(
+      DesktopCommandSchema.safeParse({
+        type: 'channel.weixin.start',
+        requestId: 'request-weixin-start',
+        cwd: 'G:/project',
+      }).success,
+    ).toBe(true)
+    expect(
+      DesktopCommandSchema.safeParse({
+        type: 'channel.weixin.get',
+        requestId: 'request-weixin-get',
+        cwd: 'G:/project',
+      }).success,
+    ).toBe(true)
+  })
+
+  test('accepts auto permission mode changes', () => {
+    expect(
+      DesktopCommandSchema.safeParse({
+        type: 'mode.set',
+        requestId: 'request-mode',
+        sessionId: 'session-1',
+        mode: 'auto',
+      }).success,
+    ).toBe(true)
+  })
+
   test('accepts workspace performance requests and rejects invalid ranges', () => {
     expect(DesktopCommandSchema.safeParse({
       type: 'performance.get', requestId: 'perf-1', cwd: 'G:/project', range: '30d', force: true,
@@ -113,6 +155,37 @@ describe('DesktopEventSchema', () => {
     ).toBe(true)
   })
 
+  test('accepts worker attribution on permission requests', () => {
+    const result = DesktopEventSchema.safeParse({
+      type: 'permission.requested',
+      sessionId: 'session-1',
+      sequence: 1,
+      request: {
+        id: 'permission-1',
+        toolCallId: 'tool-1',
+        toolName: 'Bash',
+        summary: 'Run tests',
+        input: { command: 'bun test' },
+        decisions: ['deny', 'allow_once'],
+        agentId: 'researcher@alpha',
+        agentName: 'researcher',
+        teamName: 'alpha',
+        permissionSuggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+        ],
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(
+      result.success && result.data.type === 'permission.requested'
+        ? result.data.request.permissionSuggestions
+        : undefined,
+    ).toEqual([
+      { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+    ])
+  })
+
   test('rejects an unsupported protocol version', () => {
     expect(
       DesktopEventSchema.safeParse({
@@ -141,11 +214,24 @@ describe('DesktopEventSchema', () => {
           mcpServers: [],
           plugins: [],
           memoryFiles: [],
+          autoMemory: { enabled: true, path: 'G:/project/.claude/memory' },
           modelConfig: {
             provider: 'openai',
             baseUrl: 'http://localhost:11434/v1',
             token: 'sk-test',
             model: 'qwen3-coder',
+          },
+          channel: {
+            weixin: {
+              connected: false,
+              stateDir: 'G:/project/.claude/channels/weixin',
+              accountPath: 'G:/project/.claude/channels/weixin/account.json',
+              accessPath: 'G:/project/.claude/channels/weixin/access.json',
+              cursorPath: 'G:/project/.claude/channels/weixin/cursor.txt',
+              allowedUsers: 0,
+              pendingPairings: 0,
+              cursorPresent: false,
+            },
           },
         },
       }).success,
@@ -164,6 +250,46 @@ describe('DesktopEventSchema', () => {
           status: 200,
           latencyMs: 42,
           message: '连接成功',
+        },
+      }).success,
+    ).toBe(true)
+  })
+
+  test('accepts Weixin channel login status events', () => {
+    expect(
+      DesktopEventSchema.safeParse({
+        type: 'channel.weixin.login',
+        requestId: 'request-weixin-login',
+        status: 'qr',
+        message: 'Scan with WeChat',
+        qrcodeUrl: 'https://example.test/qr',
+        qrcodeId: 'qr-1',
+      }).success,
+    ).toBe(true)
+  })
+
+  test('accepts Weixin channel runtime snapshots', () => {
+    expect(
+      DesktopEventSchema.safeParse({
+        type: 'channel.weixin.runtime',
+        requestId: 'request-weixin-runtime',
+        runtime: {
+          running: true,
+          status: 'running',
+          message: '微信消息接收中',
+          conversations: [{
+            chatId: 'wx-user-1',
+            title: '微信 wx-user-1',
+            updatedAt: 100,
+            messages: [{
+              id: 'message-1',
+              chatId: 'wx-user-1',
+              senderId: 'wx-user-1',
+              text: 'hello',
+              direction: 'inbound',
+              createdAt: 100,
+            }],
+          }],
         },
       }).success,
     ).toBe(true)

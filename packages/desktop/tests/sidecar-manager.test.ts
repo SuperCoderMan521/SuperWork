@@ -4,6 +4,7 @@ import type { SidecarProcess } from '../electron/sidecar-manager.js'
 
 class FakeProcess implements SidecarProcess {
   readonly writes: string[] = []
+  terminated = false
   private outputListeners = new Set<(chunk: string) => void>()
   private exitListeners = new Set<(code: number | null) => void>()
   private errorListeners = new Set<(error: Error) => void>()
@@ -28,7 +29,9 @@ class FakeProcess implements SidecarProcess {
     return () => this.errorListeners.delete(listener)
   }
 
-  terminate(): void {}
+  terminate(): void {
+    this.terminated = true
+  }
 
   output(value: unknown): void {
     const line = `${JSON.stringify(value)}\n`
@@ -85,5 +88,20 @@ describe('SidecarManager', () => {
     expect(manager.status).toBe('restarting')
     processes[1]!.output({ type: 'core.ready', protocolVersion: 1 })
     expect(manager.status).toBe('ready')
+  })
+
+  test('sends core shutdown before terminating a ready process', () => {
+    const process = new FakeProcess()
+    const manager = new SidecarManager(() => process)
+    manager.start()
+    process.output({ type: 'core.ready', protocolVersion: 1 })
+
+    manager.stop()
+
+    expect(process.writes).toContain(
+      '{"type":"core.shutdown","requestId":"core-shutdown"}\n',
+    )
+    expect(process.terminated).toBe(true)
+    expect(manager.status).toBe('stopped')
   })
 })

@@ -32,7 +32,17 @@ type CommandDispatcherOptions = {
   resolvePermission: (id: string, decision: PermissionDecision, payload?: unknown) => boolean
   getConfig?: (cwd: string) => Promise<DesktopConfigSnapshot>
   writeConfig?: (cwd: string, modelConfig: DesktopModelConfig) => Promise<DesktopConfigSnapshot>
+  setAutoMemoryEnabled?: (cwd: string, enabled: boolean) => Promise<DesktopConfigSnapshot>
   testConfig?: (modelConfig: DesktopModelConfig, cwd: string) => Promise<DesktopModelConnectionResult>
+  loginWeixinChannel?: (
+    cwd: string,
+    onStatus: (event: Omit<Extract<DesktopEvent, { type: 'channel.weixin.login' }>, 'type' | 'requestId'>) => void,
+  ) => Promise<DesktopConfigSnapshot>
+  clearWeixinChannel?: (cwd: string) => Promise<DesktopConfigSnapshot>
+  startWeixinChannel?: (cwd: string, requestId: string) => Promise<Extract<DesktopEvent, { type: 'channel.weixin.runtime' }>['runtime']>
+  getWeixinChannel?: (cwd: string) => Extract<DesktopEvent, { type: 'channel.weixin.runtime' }>['runtime']
+  stopWeixinChannel?: (cwd: string) => Extract<DesktopEvent, { type: 'channel.weixin.runtime' }>['runtime']
+  importSkill?: (cwd: string, sourcePath: string, allowAutoInstall?: boolean) => Promise<DesktopConfigSnapshot>
   readFile?: (path: string, cwd?: string) => Promise<string>
   writeFile?: (path: string, content: string, cwd?: string) => Promise<string>
   readMemory?: (path: string) => Promise<Extract<DesktopEvent, { type: 'memory.loaded' }>['file']>
@@ -146,11 +156,74 @@ export class DesktopCommandDispatcher {
             unsupported(command.type)),
         })
         return
+      case 'config.autoMemory.set':
+        this.options.emit({
+          type: 'config.saved',
+          requestId: command.requestId,
+          config: await (this.options.setAutoMemoryEnabled?.(command.cwd, command.enabled) ??
+            unsupported(command.type)),
+        })
+        return
       case 'config.test':
         this.options.emit({
           type: 'config.tested',
           requestId: command.requestId,
           result: await (this.options.testConfig?.(command.modelConfig, command.cwd) ??
+            unsupported(command.type)),
+        })
+        return
+      case 'channel.weixin.login':
+        this.options.emit({
+          type: 'config.saved',
+          requestId: command.requestId,
+          config: await (this.options.loginWeixinChannel?.(command.cwd, status => {
+            this.options.emit({
+              type: 'channel.weixin.login',
+              requestId: command.requestId,
+              ...status,
+            })
+          }) ?? unsupported(command.type)),
+        })
+        if (this.options.startWeixinChannel) {
+          await this.options.startWeixinChannel(command.cwd, command.requestId)
+        }
+        return
+      case 'channel.weixin.clear':
+        if (this.options.stopWeixinChannel) {
+          this.options.emit({
+            type: 'channel.weixin.runtime',
+            requestId: command.requestId,
+            runtime: this.options.stopWeixinChannel(command.cwd),
+          })
+        }
+        this.options.emit({
+          type: 'config.saved',
+          requestId: command.requestId,
+          config: await (this.options.clearWeixinChannel?.(command.cwd) ??
+            unsupported(command.type)),
+        })
+        return
+      case 'channel.weixin.start':
+        this.options.emit({
+          type: 'channel.weixin.runtime',
+          requestId: command.requestId,
+          runtime: await (this.options.startWeixinChannel?.(command.cwd, command.requestId) ??
+            unsupported(command.type)),
+        })
+        return
+      case 'channel.weixin.get':
+        this.options.emit({
+          type: 'channel.weixin.runtime',
+          requestId: command.requestId,
+          runtime: this.options.getWeixinChannel?.(command.cwd) ??
+            unsupported(command.type),
+        })
+        return
+      case 'skill.import':
+        this.options.emit({
+          type: 'skill.imported',
+          requestId: command.requestId,
+          config: await (this.options.importSkill?.(command.cwd, command.sourcePath, command.allowAutoInstall) ??
             unsupported(command.type)),
         })
         return

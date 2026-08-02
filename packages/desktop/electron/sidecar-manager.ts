@@ -62,6 +62,16 @@ export class SidecarManager {
 
   stop(): void {
     this.stoppedByOwner = true
+    if (this.process && this.status === 'ready') {
+      try {
+        this.process.write(encodeJsonLine({
+          type: 'core.shutdown',
+          requestId: 'core-shutdown',
+        }))
+      } catch {
+        // The process is already going away; termination below is the fallback.
+      }
+    }
     this.process?.terminate()
     this.process = null
     this.setStatus('stopped')

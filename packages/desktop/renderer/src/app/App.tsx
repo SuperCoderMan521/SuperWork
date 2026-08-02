@@ -3,6 +3,7 @@ import type {
   DesktopConfigSnapshot,
   DesktopEvent,
   DesktopAgentMailboxSnapshot,
+  DesktopChannelWeixinRuntime,
   DesktopMemoryFile,
   DesktopModelConnectionResult,
   DesktopModelConfig,
@@ -11,6 +12,7 @@ import type {
   DesktopScheduledTasksSnapshot,
   DesktopSessionSummary,
   DiagnosticsSnapshot,
+  PermissionMode,
 } from '../../../shared/protocol.js'
 import { ConversationPane } from '../features/chat/ConversationPane.js'
 import { Composer } from '../features/chat/Composer.js'
@@ -45,6 +47,12 @@ import {
 type View = 'chat' | 'settings' | 'performance' | 'scheduledTasks'
 const PROJECT_DEFAULT_CWD = '.'
 const LAST_WORKSPACE_KEY = 'superwork.lastWorkspace'
+const LAST_APPROVAL_MODE_KEY = 'superwork.lastApprovalMode'
+export const AGENT_MAILBOX_POLL_MS = 1500
+
+function isPersistentApprovalMode(mode: PermissionMode): mode is 'default' | 'auto' | 'bypassPermissions' {
+  return mode === 'default' || mode === 'auto' || mode === 'bypassPermissions'
+}
 
 function readStoredWorkspace(): string | null {
   if (typeof window === 'undefined') return null
@@ -59,6 +67,27 @@ function rememberWorkspace(cwd: string): void {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(LAST_WORKSPACE_KEY, cwd)
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readStoredApprovalMode(): PermissionMode {
+  if (typeof window === 'undefined') return 'default'
+  try {
+    const stored = window.localStorage.getItem(LAST_APPROVAL_MODE_KEY)
+    return isPersistentApprovalMode(stored as PermissionMode)
+      ? (stored as PermissionMode)
+      : 'default'
+  } catch {
+    return 'default'
+  }
+}
+
+function rememberApprovalMode(mode: PermissionMode): void {
+  if (!isPersistentApprovalMode(mode) || typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(LAST_APPROVAL_MODE_KEY, mode)
   } catch {
     // Ignore storage failures.
   }
@@ -85,6 +114,34 @@ export function settingsCwdForConfig(
   defaultWorkspace: string,
 ): string {
   return currentSessionCwd || defaultWorkspace
+}
+
+function emptyChannelSnapshot(cwd: string): DesktopConfigSnapshot['channel'] {
+  const stateDir = `${cwd.replace(/[\\/]+$/, '')}/.claude/channels/weixin`
+  return {
+    weixin: {
+      connected: false,
+      stateDir,
+      accountPath: `${stateDir}/account.json`,
+      accessPath: `${stateDir}/access.json`,
+      cursorPath: `${stateDir}/cursor.txt`,
+      allowedUsers: 0,
+      pendingPairings: 0,
+      cursorPresent: false,
+    },
+  }
+}
+
+function normalizeConfigCwd(cwd: string): string {
+  return cwd.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
+}
+
+export function sameConfigCwd(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
+  if (!left || !right) return false
+  return normalizeConfigCwd(left) === normalizeConfigCwd(right)
 }
 
 export function selectSidebarSessions(
@@ -123,6 +180,7 @@ export function tabFromSlash(text: string): ConfigTab | null {
   if (normalized === '/config') return 'model'
   if (normalized === '/config model') return 'model'
   if (normalized === '/config memory') return 'memory'
+  if (normalized === '/config channel') return 'channel'
   if (normalized === '/config mcp') return 'mcp'
   if (normalized === '/config plugin' || normalized === '/config plugins') {
     return 'plugins'
@@ -134,6 +192,14 @@ export function tabFromSlash(text: string): ConfigTab | null {
 }
 
 type SessionSnapshotEvent = Extract<DesktopEvent, { type: 'session.snapshot' }>
+
+export function shouldPollAgentMailbox(
+  workspaceTab: WorkspaceTab,
+  filePanelOpen: boolean,
+  hasSelectedSession: boolean,
+): boolean {
+  return workspaceTab === 'agents' && filePanelOpen && hasSelectedSession
+}
 
 export function sessionIdFromPendingWorkspaceSnapshot(
   pendingWorkspace: string | null,
@@ -163,12 +229,20 @@ export function App(): React.ReactNode {
   const [connectionTest, setConnectionTest] =
     useState<DesktopModelConnectionResult | null>(null)
   const [connectionTesting, setConnectionTesting] = useState(false)
+  const [weixinLogin, setWeixinLogin] = useState<
+    Extract<DesktopEvent, { type: 'channel.weixin.login' }> | null
+  >(null)
+  const [weixinRuntime, setWeixinRuntime] =
+    useState<DesktopChannelWeixinRuntime | null>(null)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null)
   const [artifactContent, setArtifactContent] = useState<string | null>(null)
   const [storedWorkspace, setStoredWorkspace] = useState<string | null>(() =>
     readStoredWorkspace(),
+  )
+  const [approvalMode, setApprovalMode] = useState<PermissionMode>(() =>
+    readStoredApprovalMode(),
   )
   const [buddy, setBuddy] = useState<BuddySnapshot | null>(null)
   const [performance, setPerformance] = useState<DesktopPerformanceSnapshot | null>(null)
@@ -179,6 +253,11 @@ export function App(): React.ReactNode {
   const [scheduledTasks, setScheduledTasks] = useState<DesktopScheduledTasksSnapshot | null>(null)
   const [scheduledTasksLoading, setScheduledTasksLoading] = useState(false)
   const [scheduledTasksError, setScheduledTasksError] = useState<string | null>(null)
+  const [skillImportOpen, setSkillImportOpen] = useState(false)
+  const [skillImportPath, setSkillImportPath] = useState<string | null>(null)
+  const [skillImportAutoInstall, setSkillImportAutoInstall] = useState(false)
+  const [skillImportStatus, setSkillImportStatus] = useState<'idle' | 'importing' | 'done'>('idle')
+  const [skillImportError, setSkillImportError] = useState<string | null>(null)
   const pendingWorkspaceSession = useRef<string | null>(null)
   const pendingPrompt = useRef<string | null>(null)
   const pendingArtifactPath = useRef<string | null>(null)
@@ -194,6 +273,8 @@ export function App(): React.ReactNode {
         setPerformanceError(event.error.message)
         setScheduledTasksLoading(false)
         setScheduledTasksError(event.error.message)
+        setSkillImportStatus('idle')
+        setSkillImportError(event.error.message)
       }
       if (event.type === 'session.snapshot') {
         const createdSessionId = sessionIdFromPendingWorkspaceSnapshot(
@@ -203,6 +284,14 @@ export function App(): React.ReactNode {
         if (createdSessionId) {
           pendingWorkspaceSession.current = null
           setSelectedId(createdSessionId)
+          if (isPersistentApprovalMode(approvalMode) && event.session.mode !== approvalMode) {
+            dispatch({
+              type: 'renderer.localModeChanged',
+              sessionId: createdSessionId,
+              mode: approvalMode,
+            })
+            window.desktopApi.setMode(createdSessionId, approvalMode)
+          }
           setSelectedFilePath(null)
           setFileContent(null)
           setStoredWorkspace(event.session.cwd)
@@ -219,13 +308,25 @@ export function App(): React.ReactNode {
         setView('settings')
         return
       }
-      if (event.type === 'config.snapshot' || event.type === 'config.saved') {
+      if (event.type === 'config.snapshot' || event.type === 'config.saved' || event.type === 'skill.imported') {
         setConfig(event.config)
+        if (event.type === 'skill.imported') {
+          setSkillImportStatus('done')
+          setSkillImportError(null)
+        }
         return
       }
       if (event.type === 'config.tested') {
         setConnectionTesting(false)
         setConnectionTest(event.result)
+        return
+      }
+      if (event.type === 'channel.weixin.login') {
+        setWeixinLogin(event)
+        return
+      }
+      if (event.type === 'channel.weixin.runtime') {
+        setWeixinRuntime(event.runtime)
         return
       }
       if (event.type === 'memory.loaded') {
@@ -284,6 +385,7 @@ export function App(): React.ReactNode {
     sessions[0]?.cwd,
   )
   const settingsCwd = settingsCwdForConfig(selected?.cwd, defaultWorkspace)
+  const activeConfig = sameConfigCwd(config?.cwd, settingsCwd) ? config : null
 
   useEffect(() => {
     if (selectedId || state.selectedSessionId) return
@@ -299,12 +401,26 @@ export function App(): React.ReactNode {
     window.desktopApi.getAgentMailbox(selected.cwd)
   }, [selected?.id, selected?.toolOrder.length, selected?.generationState])
 
+  useEffect(() => {
+    if (!selected) return
+    if (!shouldPollAgentMailbox(workspaceTab, filePanelOpen, true)) return
+    const poll = () => window.desktopApi.getAgentMailbox(selected.cwd)
+    poll()
+    const interval = window.setInterval(poll, AGENT_MAILBOX_POLL_MS)
+    return () => window.clearInterval(interval)
+  }, [selected?.id, selected?.cwd, workspaceTab, filePanelOpen])
+
   const refreshDiagnostics = async () =>
     setDiagnostics(await window.desktopApi.getDiagnostics())
 
   const refreshConfig = () => {
     if (settingsCwd) window.desktopApi.getConfig(settingsCwd)
+    if (settingsCwd) window.desktopApi.getWeixinChannel(settingsCwd)
   }
+
+  useEffect(() => {
+    refreshConfig()
+  }, [settingsCwd])
 
   useEffect(() => {
     if (view !== 'settings') return
@@ -315,6 +431,31 @@ export function App(): React.ReactNode {
     setSettingsTab(tab)
     setView('settings')
     refreshConfig()
+  }
+
+  const openSkillImport = () => {
+    setSkillImportOpen(true)
+    setSkillImportPath(null)
+    setSkillImportStatus('idle')
+    setSkillImportError(null)
+  }
+
+  const chooseSkillSource = async (kind: 'zip' | 'folder') => {
+    const sourcePath = await window.desktopApi.selectSkillSource(kind)
+    if (!sourcePath) return
+    setSkillImportPath(sourcePath)
+    setSkillImportError(null)
+  }
+
+  const importSkill = () => {
+    if (!skillImportPath || !settingsCwd) return
+    setSkillImportStatus('importing')
+    setSkillImportError(null)
+    window.desktopApi.importSkill(
+      settingsCwd,
+      skillImportPath,
+      skillImportAutoInstall,
+    )
   }
 
   const requestPerformance = (range = performanceRange, force = false) => {
@@ -391,6 +532,20 @@ export function App(): React.ReactNode {
     window.desktopApi.interruptGeneration(selected.id)
   }
 
+  const changeSelectedMode = (mode: PermissionMode) => {
+    if (isPersistentApprovalMode(mode)) {
+      setApprovalMode(mode)
+      rememberApprovalMode(mode)
+    }
+    if (!selected) return
+    dispatch({
+      type: 'renderer.localModeChanged',
+      sessionId: selected.id,
+      mode,
+    })
+    window.desktopApi.setMode(selected.id, mode)
+  }
+
   const openFile = (path: string) => {
     if (!selected) return
     setWorkspaceTab('files')
@@ -459,7 +614,9 @@ export function App(): React.ReactNode {
       mcpServers: [],
       plugins: [],
       memoryFiles: [],
+      autoMemory: { enabled: true, path: settingsCwd },
       modelConfig,
+      channel: emptyChannelSnapshot(settingsCwd),
     })
     window.desktopApi.writeConfig(settingsCwd, modelConfig)
   }
@@ -533,9 +690,17 @@ export function App(): React.ReactNode {
       <Composer
         generating={false}
         workspace={defaultWorkspace}
+        mode={approvalMode}
         onSubmit={submitPrompt}
         onInterrupt={() => {}}
         onSelectWorkspace={() => void createSessionFromPicker()}
+        onOpenSkills={openSkillImport}
+        onModeChange={mode => {
+          if (isPersistentApprovalMode(mode)) {
+            setApprovalMode(mode)
+            rememberApprovalMode(mode)
+          }
+        }}
       />
       {state.lastError ? (
         <div className="startup-error">
@@ -563,11 +728,21 @@ export function App(): React.ReactNode {
             onSelectWorkspace={() => void createSessionFromPicker()}
             onOpenFile={openFile}
             onOpenAgents={openAgents}
+            onOpenSkills={openSkillImport}
+            onOpenMcp={() => openSettings('mcp')}
+            skills={activeConfig?.skills ?? []}
+            mcpServers={activeConfig?.mcpServers ?? []}
+            onModeChange={changeSelectedMode}
             artifacts={localArtifacts}
             onOpenArtifact={openArtifact}
-          onResolvePermission={(permissionId, decision, payload) =>
+          onResolvePermission={(permissionId, decision, payload) => {
+            dispatch({
+              type: 'renderer.permissionResolved',
+              sessionId: selected.id,
+              permissionId,
+            })
             window.desktopApi.resolvePermission(permissionId, decision, payload)
-          }
+          }}
           error={state.lastError}
           onDismissError={() => dispatch({ type: 'renderer.clearError' })}
           onOpenDiagnostics={() => void refreshDiagnostics()}
@@ -623,15 +798,32 @@ export function App(): React.ReactNode {
           compactSummary={compactSummary}
           connectionTest={connectionTest}
           connectionTesting={connectionTesting}
+          weixinLogin={weixinLogin}
+          weixinRuntime={weixinRuntime}
           onBack={() => setView('chat')}
           onModelChange={model =>
             selected && window.desktopApi.setModel(selected.id, model)
           }
-          onModeChange={mode =>
-            selected && window.desktopApi.setMode(selected.id, mode)
-          }
+          onModeChange={changeSelectedMode}
           onModelConfigChange={writeModelConfig}
           onTestModelConfig={testModelConfig}
+          onLoginWeixinChannel={() => {
+            if (!settingsCwd) return
+            setWeixinLogin(null)
+            window.desktopApi.loginWeixinChannel(settingsCwd)
+          }}
+          onClearWeixinChannel={() => {
+            if (!settingsCwd) return
+            setWeixinLogin(null)
+            window.desktopApi.clearWeixinChannel(settingsCwd)
+          }}
+          onStartWeixinChannel={() => {
+            if (!settingsCwd) return
+            window.desktopApi.startWeixinChannel(settingsCwd)
+          }}
+          onAutoMemoryChange={enabled =>
+            settingsCwd && window.desktopApi.setAutoMemoryEnabled(settingsCwd, enabled)
+          }
           onReadMemory={path => window.desktopApi.readMemory(path)}
           onCreateMemory={createMemory}
           onSaveMemory={(path, content) =>
@@ -686,6 +878,74 @@ export function App(): React.ReactNode {
           onCopy={() => void navigator.clipboard.writeText(diagnostics.latestLines)}
           onOpenDirectory={() => void window.desktopApi.openLogFolder()}
         />
+      ) : null}
+      {skillImportOpen ? (
+        <div
+          className="skill-import-overlay"
+          role="presentation"
+          onDragOver={event => {
+            event.preventDefault()
+          }}
+          onDrop={event => {
+            event.preventDefault()
+            const file = event.dataTransfer.files[0] as File & { path?: string }
+            if (file?.path) {
+              setSkillImportPath(file.path)
+              setSkillImportError(null)
+            }
+          }}
+        >
+          <section className="skill-import-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-import-title">
+            <header>
+              <h2 id="skill-import-title">导入技能</h2>
+              <button type="button" aria-label="关闭导入技能" onClick={() => setSkillImportOpen(false)}>
+                ×
+              </button>
+            </header>
+            <div className="skill-import-dropzone">
+              <div aria-hidden="true">▣</div>
+              <strong>拖拽文件或点击上传</strong>
+              <span>{skillImportPath ?? '支持 skills zip 或包含 SKILL.md 的文件夹'}</span>
+              <div className="skill-import-pickers">
+                <button type="button" onClick={() => void chooseSkillSource('zip')}>
+                  选择 zip
+                </button>
+                <button type="button" onClick={() => void chooseSkillSource('folder')}>
+                  选择文件夹
+                </button>
+              </div>
+            </div>
+            <label className="skill-import-checkbox">
+              <input
+                type="checkbox"
+                checked={skillImportAutoInstall}
+                onChange={event => setSkillImportAutoInstall(event.target.checked)}
+              />
+              非高风险自动安装
+            </label>
+            <div className="skill-import-requirements">
+              <strong>文件要求</strong>
+              <ul>
+                <li>文件夹或者 .zip 需要包含 SKILL.md 文件</li>
+                <li>SKILL.md 文件需包含 YAML 格式的技能名称和描述</li>
+              </ul>
+            </div>
+            {skillImportError ? <p className="skill-import-error">{skillImportError}</p> : null}
+            {skillImportStatus === 'done' ? <p className="skill-import-success">导入成功，Skills 列表已刷新。</p> : null}
+            <footer>
+              <button type="button" onClick={() => setSkillImportOpen(false)}>
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={!skillImportPath || skillImportStatus === 'importing'}
+                onClick={importSkill}
+              >
+                {skillImportStatus === 'importing' ? '导入中…' : '导入'}
+              </button>
+            </footer>
+          </section>
+        </div>
       ) : null}
     </div>
   )

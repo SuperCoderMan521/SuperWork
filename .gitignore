@@ -29,6 +29,7 @@ Claude-Haiku-*.txt
 # Agent / tool state dirs
 .swarm/
 .agents/__pycache__/
+.workbuddy/
 
 # Python bytecode
 __pycache__/

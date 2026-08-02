@@ -45,7 +45,9 @@ export function WorkspacePanel({
   const [uncontrolledActiveTab, setUncontrolledActiveTab] = useState<WorkspaceTab>(
     fileCount === 0 && hasAgents ? 'agents' : 'files',
   )
-  const activeTab = controlledActiveTab ?? uncontrolledActiveTab
+  const requestedActiveTab = controlledActiveTab ?? uncontrolledActiveTab
+  const activeTab =
+    requestedActiveTab === 'agents' && !hasAgents ? 'files' : requestedActiveTab
   const selectTab = (tab: WorkspaceTab) => {
     onTabChange?.(tab)
     if (controlledActiveTab === undefined) setUncontrolledActiveTab(tab)
@@ -64,16 +66,18 @@ export function WorkspacePanel({
           >
             文件 <span>{fileCount}</span>
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'agents'}
-            className={activeTab === 'agents' ? 'active' : undefined}
-            onClick={() => selectTab('agents')}
-          >
-            Agent
-            {hasAgents ? <i aria-hidden="true" /> : null}
-          </button>
+          {hasAgents ? (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'agents'}
+              className={activeTab === 'agents' ? 'active' : undefined}
+              onClick={() => selectTab('agents')}
+            >
+              Agent
+              <i aria-hidden="true" />
+            </button>
+          ) : null}
           <button
             type="button"
             role="tab"
@@ -87,7 +91,7 @@ export function WorkspacePanel({
       </header>
       <div className="workspace-panel-body">
         {activeTab === 'agents' ? (
-          <AgentActivityPanel activity={agentActivity} />
+          <AgentActivityPanel activity={agentActivity} onOpenFile={onOpenFile} />
         ) : activeTab === 'artifacts' ? (
           <LocalArtifactsPanel
             artifacts={artifacts}

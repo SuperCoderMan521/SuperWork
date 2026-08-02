@@ -6,6 +6,7 @@ import {
   DESKTOP_DIAGNOSTICS_GET_CHANNEL,
   DESKTOP_EVENT_CHANNEL,
   DESKTOP_LOG_FOLDER_OPEN_CHANNEL,
+  DESKTOP_SKILL_SOURCE_SELECT_CHANNEL,
   DESKTOP_WORKSPACE_SELECT_CHANNEL,
   DESKTOP_WORKSPACE_EDITORS_LIST_CHANNEL,
   DESKTOP_WORKSPACE_EDITOR_OPEN_CHANNEL,
@@ -182,6 +183,21 @@ ipcMain.handle(DESKTOP_WORKSPACE_SELECT_CHANNEL, async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择工作文件夹',
     properties: ['openDirectory', 'createDirectory'],
+  })
+  return result.canceled ? null : (result.filePaths[0] ?? null)
+})
+ipcMain.handle(DESKTOP_SKILL_SOURCE_SELECT_CHANNEL, async (_event, value: unknown) => {
+  if (!mainWindow) return null
+  const kind = typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>).kind
+    : undefined
+  const result = await dialog.showOpenDialog(mainWindow, kind === 'folder' ? {
+    title: '选择技能文件夹',
+    properties: ['openDirectory'],
+  } : {
+    title: '选择 Skills zip',
+    properties: ['openFile'],
+    filters: [{ name: 'Skills zip', extensions: ['zip'] }],
   })
   return result.canceled ? null : (result.filePaths[0] ?? null)
 })

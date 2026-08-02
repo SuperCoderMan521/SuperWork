@@ -5,10 +5,14 @@ import { getEmptyToolPermissionContext } from 'src/Tool.js'
 import type { AppState } from 'src/state/AppStateStore.js'
 import { getDefaultAppState } from 'src/state/AppStateStore.js'
 import {
+  cleanupInProcessTeammatesForSession,
+  DesktopQueryRunner,
   createDesktopCanUseTool,
+  createDesktopLeaderPermissionHandler,
   desktopSlashFallback,
   mergeInteractivePayload,
   nextResultWithTimeout,
+  nextResultWithMirrorTicks,
   parseAskUserQuestionPayload,
   subscribeInterrupt,
   toCorePermissionDecision,
@@ -77,6 +81,134 @@ describe('desktopSlashFallback', () => {
   })
 })
 
+describe('cleanupInProcessTeammatesForSession', () => {
+  test('kills only running in-process teammates owned by the deleted session', () => {
+    const appState = getDefaultAppState()
+    appState.tasks = {
+      owned: {
+        id: 'owned',
+        type: 'in_process_teammate',
+        status: 'running',
+        description: 'owned teammate',
+        startTime: 1,
+        outputFile: '',
+        outputOffset: 0,
+        notified: false,
+        identity: {
+          agentId: 'worker@alpha',
+          agentName: 'worker',
+          teamName: 'alpha',
+          planModeRequired: false,
+          parentSessionId: 'session-1',
+        },
+        prompt: 'work',
+        awaitingPlanApproval: false,
+        permissionMode: 'default',
+        pendingUserMessages: [],
+        isIdle: false,
+        shutdownRequested: false,
+        lastReportedToolCount: 0,
+        lastReportedTokenCount: 0,
+      },
+      otherSession: {
+        id: 'otherSession',
+        type: 'in_process_teammate',
+        status: 'running',
+        description: 'other teammate',
+        startTime: 1,
+        outputFile: '',
+        outputOffset: 0,
+        notified: false,
+        identity: {
+          agentId: 'other@beta',
+          agentName: 'other',
+          teamName: 'beta',
+          planModeRequired: false,
+          parentSessionId: 'session-2',
+        },
+        prompt: 'work',
+        awaitingPlanApproval: false,
+        permissionMode: 'default',
+        pendingUserMessages: [],
+        isIdle: false,
+        shutdownRequested: false,
+        lastReportedToolCount: 0,
+        lastReportedTokenCount: 0,
+      },
+      completed: {
+        id: 'completed',
+        type: 'in_process_teammate',
+        status: 'completed',
+        description: 'done teammate',
+        startTime: 1,
+        outputFile: '',
+        outputOffset: 0,
+        notified: false,
+        identity: {
+          agentId: 'done@alpha',
+          agentName: 'done',
+          teamName: 'alpha',
+          planModeRequired: false,
+          parentSessionId: 'session-1',
+        },
+        prompt: 'work',
+        awaitingPlanApproval: false,
+        permissionMode: 'default',
+        pendingUserMessages: [],
+        isIdle: true,
+        shutdownRequested: false,
+        lastReportedToolCount: 0,
+        lastReportedTokenCount: 0,
+      },
+    } as AppState['tasks']
+    const killed: string[] = []
+
+    const count = cleanupInProcessTeammatesForSession(
+      'session-1',
+      appState,
+      updater => Object.assign(appState, updater(appState)),
+      taskId => {
+        killed.push(taskId)
+        return true
+      },
+    )
+
+    expect(count).toBe(1)
+    expect(killed).toEqual(['owned'])
+  })
+})
+
+describe('DesktopQueryRunner cleanupAll behavior', () => {
+  test('cleans every tracked session through the same cleanup path', () => {
+    const broker = new PermissionBroker({ emit: () => {} })
+    const runner = new DesktopQueryRunner(broker)
+    const engines = (runner as unknown as {
+      engines: Map<string, {
+        engine: { interrupt: () => void }
+        appState: AppState
+      }>
+    }).engines
+    let interrupts = 0
+    const firstState = getDefaultAppState()
+    firstState.tasks = {}
+    const secondState = getDefaultAppState()
+    secondState.tasks = {}
+    engines.set('session-1', {
+      engine: { interrupt: () => { interrupts += 1 } },
+      appState: firstState,
+    })
+    engines.set('session-2', {
+      engine: { interrupt: () => { interrupts += 1 } },
+      appState: secondState,
+    })
+
+    expect(runner.cleanupAll()).toBe(0)
+    expect(interrupts).toBe(2)
+    expect(engines.size).toBe(0)
+    expect(runner.cleanupAll()).toBe(0)
+  })
+})
+
 describe('subscribeInterrupt', () => {
   test('runs interrupt immediately when the signal was already aborted', () => {
     const controller = new AbortController()
@@ -121,6 +253,28 @@ describe('nextResultWithTimeout', () => {
     ).rejects.toThrow('首包等待超时')
 
     expect(timedOut).toBe(1)
+  })
+})
+
+describe('nextResultWithMirrorTicks', () => {
+  test('yields mirrored teammate events while waiting for the next query event', async () => {
+    let resolveNext: ((value: IteratorResult<string>) => void) | undefined
+    const nextPromise = new Promise<IteratorResult<string>>(resolve => {
+      resolveNext = resolve
+    })
+    let mirrorCalls = 0
+    const iterator = nextResultWithMirrorTicks(
+      () => nextPromise,
+      () => {
+        mirrorCalls += 1
+        return mirrorCalls === 1 ? ['mirrored-tool'] : []
+      },
+      { mirrorIntervalMs: 1 },
+    )[Symbol.asyncIterator]()
+
+    expect(await iterator.next()).toEqual({ done: false, value: 'mirrored-tool' })
+    resolveNext?.({ done: false, value: 'query-event' })
+    expect(await iterator.next()).toEqual({ done: true, value: { done: false, value: 'query-event' } })
   })
 })
 
@@ -365,6 +519,76 @@ describe('createDesktopCanUseTool', () => {
     expect(result.behavior).toBe('allow')
     if (result.behavior !== 'allow') throw new Error('unreachable')
     expect(result.updatedInput).toEqual(input)
+  })
+})
+
+describe('createDesktopLeaderPermissionHandler', () => {
+  test('routes an in-process worker approval through the parent desktop session', async () => {
+    const appState = getDefaultAppState()
+    appState.toolPermissionContext = getEmptyToolPermissionContext()
+    const emitted: Array<{
+      sessionId: string
+      agentName?: string
+      permissionSuggestions?: unknown
+    }> = []
+    const broker = new PermissionBroker({
+      createId: () => 'permission-worker',
+      emit: (request, sessionId) => {
+        emitted.push({
+          sessionId,
+          agentName: request.agentName,
+          permissionSuggestions: request.permissionSuggestions,
+        })
+        queueMicrotask(() => broker.resolve(request.id, 'allow_once'))
+      },
+    })
+    const handler = createDesktopLeaderPermissionHandler({
+      permissionBroker: broker,
+    })
+
+    const result = await handler({
+      identity: {
+        agentId: 'researcher@team-1',
+        agentName: 'researcher',
+        teamName: 'team-1',
+        parentSessionId: 'desktop-session-1',
+        planModeRequired: false,
+      },
+      tool: {
+        name: 'Bash',
+        inputSchema: { parse: (value: Record<string, unknown>) => value },
+      } as never,
+      input: { command: 'bun test' },
+      toolUseContext: {
+        getAppState: () => appState,
+        setAppState: (updater: (prev: AppState) => AppState) =>
+          Object.assign(appState, updater(appState)),
+      } as never,
+      assistantMessage: {} as never,
+      toolUseID: 'tool-worker-1',
+      permissionResult: {
+        behavior: 'ask',
+        message: 'Bash requires approval',
+        suggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+        ],
+      },
+      description: 'Run bun test',
+    })
+
+    expect(result).toEqual({
+      behavior: 'allow',
+      updatedInput: { command: 'bun test' },
+    })
+    expect(emitted).toEqual([
+      {
+        sessionId: 'desktop-session-1',
+        agentName: 'researcher',
+        permissionSuggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+        ],
+      },
+    ])
   })
 })
 

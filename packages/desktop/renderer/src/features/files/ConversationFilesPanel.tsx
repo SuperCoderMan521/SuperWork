@@ -31,6 +31,44 @@ function extension(path: string): string {
   return index === -1 ? name.toLowerCase() : name.slice(index + 1).toLowerCase()
 }
 
+function normalizedToolName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function isFileProducingTool(name: string): boolean {
+  return new Set([
+    'write',
+    'filewrite',
+    'filewritetool',
+    'edit',
+    'fileedit',
+    'fileedittool',
+    'multiedit',
+    'notebookedit',
+    'notebookedittool',
+  ]).has(normalizedToolName(name))
+}
+
+function isShellProducingTool(name: string): boolean {
+  return new Set([
+    'bash',
+    'bashtool',
+    'powershell',
+    'powershelltool',
+    'shell',
+  ]).has(normalizedToolName(name))
+}
+
+function generatedOutputPathCandidates(output: string | undefined): string[] {
+  if (!output) return []
+  const generatedLinePattern =
+    /\b(generated|created|wrote|written|saved|updated|built|emitted|输出|生成|创建|写入|保存)\b/i
+  return output
+    .split(/\r?\n/)
+    .filter(line => generatedLinePattern.test(line))
+    .flatMap(line => extractPathCandidates(line))
+}
+
 export function filesFromTools(
   tools: Record<string, DesktopToolCall>,
   order: string[],
@@ -40,13 +78,17 @@ export function filesFromTools(
   for (const id of order) {
     const tool = tools[id]
     if (!tool) continue
+    if (!isFileProducingTool(tool.name) && !isShellProducingTool(tool.name)) {
+      continue
+    }
     const diff = buildEditDiff(tool) ?? undefined
-    const candidates = [
-      stringFromInput(tool.input, 'file_path'),
-      stringFromInput(tool.input, 'path'),
-      diff?.path ?? undefined,
-      ...extractPathCandidates(`${tool.summary}\n${tool.output ?? ''}`),
-    ].filter((value): value is string => Boolean(value))
+    const candidates = isShellProducingTool(tool.name)
+      ? generatedOutputPathCandidates(tool.output)
+      : [
+          stringFromInput(tool.input, 'file_path'),
+          stringFromInput(tool.input, 'path'),
+          diff?.path ?? undefined,
+        ].filter((value): value is string => Boolean(value))
     for (const candidate of candidates) {
       if (!looksLikeFilePath(candidate)) continue
       const key = candidate.toLowerCase()
@@ -335,39 +377,48 @@ export function ConversationFilesPanel({
           ) : null}
         </div>
       </header>
-      {files.length === 0 ? (
-        <p className="empty-hint">当前对话还没有产生文件。</p>
-      ) : (
-        <ul>
-          {files.map(file => (
-            <li key={file.id}>
-              <button
-                type="button"
-                className={file.path === selectedPath ? 'active' : undefined}
-                onClick={() => onOpen(file.path)}
-              >
-                <strong>{file.label}</strong>
-                <span>{file.path}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {selectedPath ? (
-        <section className="file-preview">
-          <header>
-            <h3>{selectedPath}</h3>
-          </header>
-          {selected?.diff ? <DiffPreview diff={selected.diff} /> : null}
-          <FileViewer path={selectedPath} content={fileContent} />
-          <textarea
-            aria-label="文件内容"
-            value={fileContent === null ? '加载中…' : draft}
-            disabled={fileContent === null}
-            onChange={event => setDraft(event.target.value)}
-          />
-        </section>
-      ) : null}
+      <div className="files-panel-split">
+        {files.length === 0 ? (
+          <p className="empty-hint">当前对话还没有产生文件。</p>
+        ) : (
+          <ul>
+            {files.map(file => (
+              <li key={file.id}>
+                <button
+                  type="button"
+                  className={file.path === selectedPath ? 'active' : undefined}
+                  onClick={() => onOpen(file.path)}
+                >
+                  <strong>{file.label}</strong>
+                  <span>{file.path}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {selectedPath ? (
+          <section className="file-preview file-preview-main">
+            <header>
+              <h3>{selectedPath}</h3>
+            </header>
+            {selected?.diff ? <DiffPreview diff={selected.diff} /> : null}
+            <FileViewer path={selectedPath} content={fileContent} />
+            <details className="file-editor-drawer">
+              <summary>查看/复制原始内容</summary>
+              <textarea
+                aria-label="文件内容"
+                value={fileContent === null ? '加载中…' : draft}
+                disabled={fileContent === null}
+                onChange={event => setDraft(event.target.value)}
+              />
+            </details>
+          </section>
+        ) : (
+          <section className="file-preview file-preview-main file-preview-empty">
+            <p>选择左侧文件查看内容。</p>
+          </section>
+        )}
+      </div>
     </aside>
   )
 }

@@ -12,6 +12,7 @@ const SequencedSessionEventSchema = z.object({
 export const PermissionModeSchema = z.enum([
   'default',
   'acceptEdits',
+  'auto',
   'bypassPermissions',
   'plan',
   'dontAsk',
@@ -22,6 +23,11 @@ export const PermissionDecisionSchema = z.enum([
   'allow_once',
   'allow_session',
 ])
+
+const PermissionSuggestionSchema = z.object({
+  type: z.string().min(1),
+  destination: z.string().min(1).optional(),
+}).passthrough()
 
 export const DesktopErrorSchema = z.object({
   code: z.enum([
@@ -115,6 +121,9 @@ export const DesktopToolCallSchema = z.object({
   startedAt: z.number().int().nonnegative().optional(),
   completedAt: z.number().int().nonnegative().optional(),
   displayOrder: z.number().int().nonnegative().optional(),
+  agentId: z.string().min(1).optional(),
+  agentName: z.string().min(1).optional(),
+  teamName: z.string().min(1).optional(),
 })
 
 export const DesktopPermissionRequestSchema = z.object({
@@ -124,6 +133,10 @@ export const DesktopPermissionRequestSchema = z.object({
   summary: z.string(),
   input: z.unknown(),
   decisions: z.array(PermissionDecisionSchema).min(1),
+  agentId: z.string().min(1).optional(),
+  agentName: z.string().min(1).optional(),
+  teamName: z.string().min(1).optional(),
+  permissionSuggestions: z.array(PermissionSuggestionSchema).optional(),
 })
 
 export const DesktopSessionSummarySchema = z.object({
@@ -177,13 +190,63 @@ export const DesktopModelConfigSchema = z.object({
   pricing: DesktopModelPricingSchema.optional(),
 })
 
+export const DesktopAutoMemoryConfigSchema = z.object({
+  enabled: z.boolean(),
+  path: z.string().min(1),
+})
+
+export const DesktopChannelWeixinSnapshotSchema = z.object({
+  connected: z.boolean(),
+  stateDir: z.string().min(1),
+  accountPath: z.string().min(1),
+  accessPath: z.string().min(1),
+  cursorPath: z.string().min(1),
+  baseUrl: z.string().optional(),
+  userId: z.string().optional(),
+  savedAt: z.string().optional(),
+  allowedUsers: z.number().int().nonnegative(),
+  pendingPairings: z.number().int().nonnegative(),
+  cursorPresent: z.boolean(),
+})
+
+export const DesktopChannelWeixinMessageSchema = z.object({
+  id: IdSchema,
+  chatId: z.string().min(1),
+  senderId: z.string().min(1),
+  text: z.string(),
+  direction: z.enum(['inbound', 'outbound']),
+  createdAt: z.number().int().nonnegative(),
+  attachmentPath: z.string().optional(),
+  attachmentType: z.string().optional(),
+})
+
+export const DesktopChannelWeixinConversationSchema = z.object({
+  chatId: z.string().min(1),
+  title: z.string().min(1),
+  updatedAt: z.number().int().nonnegative(),
+  messages: z.array(DesktopChannelWeixinMessageSchema),
+})
+
+export const DesktopChannelWeixinRuntimeSchema = z.object({
+  running: z.boolean(),
+  status: z.enum(['stopped', 'starting', 'running', 'failed']),
+  message: z.string().min(1).optional(),
+  conversations: z.array(DesktopChannelWeixinConversationSchema),
+})
+
+export const DesktopChannelSnapshotSchema = z.object({
+  weixin: DesktopChannelWeixinSnapshotSchema,
+})
+
 export const DesktopConfigSnapshotSchema = z.object({
   cwd: z.string().min(1),
   skills: z.array(DesktopConfigItemSchema),
   mcpServers: z.array(DesktopConfigItemSchema),
   plugins: z.array(DesktopConfigItemSchema),
   memoryFiles: z.array(DesktopMemoryFileSchema),
+  autoMemory: DesktopAutoMemoryConfigSchema,
   modelConfig: DesktopModelConfigSchema.optional(),
+  channel: DesktopChannelSnapshotSchema,
 })
 
 export const DesktopModelConnectionResultSchema = z.object({
@@ -296,9 +359,36 @@ export const DesktopCommandSchema = z.discriminatedUnion('type', [
     modelConfig: DesktopModelConfigSchema,
   }),
   RequestSchema.extend({
+    type: z.literal('config.autoMemory.set'),
+    cwd: z.string().min(1),
+    enabled: z.boolean(),
+  }),
+  RequestSchema.extend({
     type: z.literal('config.test'),
     cwd: z.string().min(1),
     modelConfig: DesktopModelConfigSchema,
+  }),
+  RequestSchema.extend({
+    type: z.literal('channel.weixin.login'),
+    cwd: z.string().min(1),
+  }),
+  RequestSchema.extend({
+    type: z.literal('channel.weixin.clear'),
+    cwd: z.string().min(1),
+  }),
+  RequestSchema.extend({
+    type: z.literal('channel.weixin.start'),
+    cwd: z.string().min(1),
+  }),
+  RequestSchema.extend({
+    type: z.literal('channel.weixin.get'),
+    cwd: z.string().min(1),
+  }),
+  RequestSchema.extend({
+    type: z.literal('skill.import'),
+    cwd: z.string().min(1),
+    sourcePath: z.string().min(1),
+    allowAutoInstall: z.boolean().optional(),
   }),
   RequestSchema.extend({
     type: z.literal('file.read'),
@@ -390,6 +480,21 @@ export const DesktopEventSchema = z.discriminatedUnion('type', [
   RequestSchema.extend({
     type: z.literal('config.tested'),
     result: DesktopModelConnectionResultSchema,
+  }),
+  RequestSchema.extend({
+    type: z.literal('channel.weixin.login'),
+    status: z.enum(['starting', 'qr', 'waiting', 'connected', 'failed']),
+    message: z.string().min(1),
+    qrcodeUrl: z.string().optional(),
+    qrcodeId: z.string().optional(),
+  }),
+  RequestSchema.extend({
+    type: z.literal('channel.weixin.runtime'),
+    runtime: DesktopChannelWeixinRuntimeSchema,
+  }),
+  RequestSchema.extend({
+    type: z.literal('skill.imported'),
+    config: DesktopConfigSnapshotSchema,
   }),
   RequestSchema.extend({
     type: z.literal('file.loaded'),

@@ -1,6 +1,25 @@
 import { fileURLToPath } from 'node:url'
+import { createServer } from 'node:net'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
+
+async function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const server = createServer()
+    server.once('error', () => resolve(false))
+    server.once('listening', () => {
+      server.close(() => resolve(true))
+    })
+    server.listen(port, '127.0.0.1')
+  })
+}
+
+async function findAvailablePort(start: number): Promise<number> {
+  for (let port = start; port < start + 50; port += 1) {
+    if (await isPortAvailable(port)) return port
+  }
+  throw new Error(`No available Vite port found from ${start}`)
+}
 
 const build = Bun.spawn(['bun', 'run', 'build:processes'], {
   cwd: packageRoot,
@@ -9,13 +28,15 @@ const build = Bun.spawn(['bun', 'run', 'build:processes'], {
 })
 if ((await build.exited) !== 0) process.exit(1)
 
-const vite = Bun.spawn(['bunx', 'vite'], {
+const vitePort = await findAvailablePort(5173)
+const devUrl = `http://localhost:${vitePort}`
+
+const vite = Bun.spawn(['bunx', 'vite', '--host', '127.0.0.1', '--port', String(vitePort), '--strictPort'], {
   cwd: packageRoot,
   stdout: 'inherit',
   stderr: 'inherit',
 })
 
-const devUrl = 'http://localhost:5173'
 let ready = false
 for (let attempt = 0; attempt < 100; attempt += 1) {
   try {

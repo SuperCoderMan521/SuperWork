@@ -49,6 +49,35 @@ describe('PermissionBroker', () => {
     })
   })
 
+  test('emits permission suggestions for the renderer', async () => {
+    let emitted: unknown
+    const broker = new PermissionBroker({
+      createId: () => 'permission-1',
+      emit: request => {
+        emitted = request
+      },
+    })
+
+    void broker.request({
+      sessionId: 'session-1',
+      toolCallId: 'tool-1',
+      toolName: 'Write',
+      summary: 'Write a file to the local filesystem.',
+      input: { file_path: 'K:\\ai\\12\\seckill-node\\package.json' },
+      allowSession: true,
+      permissionSuggestions: [
+        { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+      ],
+    })
+
+    expect(emitted).toMatchObject({
+      id: 'permission-1',
+      permissionSuggestions: [
+        { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+      ],
+    })
+  })
+
   test('rejects duplicate and unknown resolutions', async () => {
     const broker = new PermissionBroker({
       createId: () => 'permission-1',
@@ -97,5 +126,36 @@ describe('PermissionBroker', () => {
     expect(broker.pendingCount).toBe(1)
     broker.resolve('permission-2', 'allow_session')
     expect(await second).toEqual({ decision: 'allow_session' })
+  })
+
+  test('denies new requests for a closed session without emitting another prompt', async () => {
+    const emitted: string[] = []
+    const broker = new PermissionBroker({
+      createId: () => `permission-${emitted.length + 1}`,
+      emit: request => emitted.push(request.id),
+    })
+    const pending = broker.request({
+      sessionId: 'session-1',
+      toolCallId: 'tool-1',
+      toolName: 'Write',
+      summary: 'write file',
+      input: {},
+      allowSession: true,
+    })
+
+    expect(broker.closeSession('session-1')).toBe(1)
+    expect(await pending).toEqual({ decision: 'deny' })
+    const late = await broker.request({
+      sessionId: 'session-1',
+      toolCallId: 'tool-late',
+      toolName: 'Bash',
+      summary: 'late command',
+      input: {},
+      allowSession: true,
+    })
+
+    expect(late).toEqual({ decision: 'deny' })
+    expect(emitted).toEqual(['permission-1'])
+    expect(broker.pendingCount).toBe(0)
   })
 })

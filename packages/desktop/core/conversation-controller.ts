@@ -53,11 +53,15 @@ export class DesktopConversationController {
     this.firstEventTimeoutMs = options.firstEventTimeoutMs ?? 45_000
   }
 
-  createSession(cwd: string): DesktopSession {
+  isBusy(): boolean {
+    return this.activeGeneration !== null
+  }
+
+  createSession(cwd: string, title?: string): DesktopSession {
     const id = this.createId()
     const session: DesktopSession = {
       id,
-      title: 'New conversation',
+      title: title ?? 'New conversation',
       cwd,
       updatedAt: this.now(),
       model: this.options.defaultModel,

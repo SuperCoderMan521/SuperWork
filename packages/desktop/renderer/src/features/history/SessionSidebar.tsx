@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type {
   CoreDiagnosticStatus,
   DesktopChannelWeixinConversation,
@@ -101,6 +101,26 @@ export function SessionSidebar({
   const groups = groupSessionsByWorkspace(sessions)
   const { locale, toggleLocale } = useI18n()
   const [tab, setTab] = useState<'sessions' | 'weixin'>('sessions')
+  const [fading, setFading] = useState(false)
+
+  const switchTab = (next: 'sessions' | 'weixin') => {
+    if (next === tab) return
+    setFading(true)
+    window.setTimeout(() => {
+      setTab(next)
+      setFading(false)
+    }, 150)
+  }
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return
+      if (event.key === 'ArrowLeft' && tab === 'weixin') switchTab('sessions')
+      else if (event.key === 'ArrowRight' && tab === 'sessions') switchTab('weixin')
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [tab])
 
   return (
     <aside className="sidebar">
@@ -110,14 +130,16 @@ export function SessionSidebar({
         </div>
       </div>
       {onSelectWeixin ? (
-        <div className="sidebar-tabs" role="tablist" aria-label="侧边栏视图切换">
+        <div className="sidebar-tabs" role="tablist" aria-label="侧边栏视图切换" data-active-tab={tab}>
+          <span className="sidebar-tab-indicator" aria-hidden="true" />
           <button
             type="button"
             role="tab"
             aria-selected={tab === 'sessions'}
             data-active={tab === 'sessions'}
-            onClick={() => setTab('sessions')}
+            onClick={() => switchTab('sessions')}
           >
+            <span className="sidebar-tab-icon" aria-hidden="true">✓</span>
             对话
           </button>
           <button
@@ -125,13 +147,14 @@ export function SessionSidebar({
             role="tab"
             aria-selected={tab === 'weixin'}
             data-active={tab === 'weixin'}
-            onClick={() => setTab('weixin')}
+            onClick={() => switchTab('weixin')}
           >
+            <span className="sidebar-tab-icon" aria-hidden="true">💬</span>
             微信
           </button>
         </div>
       ) : null}
-      <nav className="session-nav" aria-label="对话历史">
+      <nav className="session-nav" aria-label="对话历史" data-fading={fading}>
         {tab === 'sessions' ? (
           <>
             <h2>对话</h2>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
 export type Locale = 'zh-CN' | 'en-US'
 const STORAGE_KEY = 'superwork.locale'
@@ -7,9 +7,9 @@ const zhToEn: Record<string, string> = {
   '对话': 'Conversations', '还没有会话': 'No conversations yet', '未命名会话': 'Untitled conversation',
   '模型': 'Model', '插件': 'Plugins', '记忆': 'Memory', '新任务': 'New task', '查看日志': 'View logs',
   '已连接': 'Connected', '启动失败': 'Startup failed', '重启中': 'Restarting', '已停止': 'Stopped', '启动中': 'Starting',
-  '选择工作区': 'Choose workspace', '输入问题，或输入 / 使用 Claude Code 指令': 'Ask anything, or type / for Claude Code commands',
+  '选择工作区': 'Choose workspace', '输入问题，或输入 / 使用 SuperWork 指令': 'Ask anything, or type / for SuperWork commands',
   '正在生成，可以随时中断': 'Generating — you can stop at any time', '发送': 'Send', '中断生成': 'Stop generation',
-  'Claude Code 配置': 'Claude Code Settings', '返回': 'Back', '请选择一个会话': 'Select a conversation',
+  'SuperWork 配置': 'SuperWork Settings', '返回': 'Back', '请选择一个会话': 'Select a conversation',
   '项目路径': 'Project path', '配置文件': 'Configuration file', '权限模式': 'Permission mode',
   '模型执行配置': 'Model runtime configuration', '测试连接': 'Test connection', '测试中...': 'Testing...',
   '文件': 'Files', '加载中…': 'Loading…', '当前对话还没有产生文件。': 'No files have been created in this conversation.',

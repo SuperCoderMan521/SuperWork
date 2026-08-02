@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import type {
   DesktopConfigItem,
   DesktopConfigSnapshot,
@@ -76,7 +76,7 @@ function ChannelPanel({
         <div>
           <span>Channel</span>
           <h2>微信通道</h2>
-          <p>把微信消息作为 Claude Code Channel 接入，适合手机上继续对话、远程审批工具调用。</p>
+          <p>把微信消息作为 SuperWork Channel 接入，适合手机上继续对话、远程审批工具调用。</p>
         </div>
         <strong className={connected ? 'channel-status connected' : 'channel-status'}>
           {connected ? '已连接' : '未连接'}
@@ -142,7 +142,7 @@ function ChannelPanel({
         <h3>第一次打通</h3>
         <ol className="channel-steps">
           <li><code>ccb weixin login</code><span>扫码登录并写入本地 token。</span></li>
-          <li><code>ccb --channels plugin:weixin@builtin</code><span>用微信通道启动 Claude Code。</span></li>
+          <li><code>ccb --channels plugin:weixin@builtin</code><span>用微信通道启动 SuperWork。</span></li>
           <li><code>ccb weixin access pair &lt;code&gt;</code><span>微信用户第一次发消息后，用返回的配对码授权。</span></li>
         </ol>
       </section>
@@ -271,7 +271,7 @@ export function ConfigCenter({
   const ruleMemoryFiles = memoryFiles.filter(file => file.scope === 'project' || file.scope === 'user')
 
   return (
-    <main className="settings-page" aria-label="Claude Code 配置">
+    <main className="settings-page" aria-label="SuperWork 配置">
       <aside className="settings-sidebar">
         <button
           className="settings-back"
@@ -282,7 +282,7 @@ export function ConfigCenter({
           ← 返回
         </button>
         <div>
-          <h2>Claude Code 配置</h2>
+          <h2>SuperWork 配置</h2>
           <p>{selectedTitle ?? '请选择一个会话'}</p>
         </div>
         <nav className="settings-tabs" aria-label="配置分类">

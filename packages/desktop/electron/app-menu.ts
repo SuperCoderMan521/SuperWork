@@ -17,7 +17,7 @@ export function createApplicationMenuTemplate({
       label: 'File',
       submenu: [
         {
-          label: 'Claude Code 配置',
+          label: 'SuperWork 配置',
           accelerator: 'CommandOrControl+,',
           click: openSettings,
         },

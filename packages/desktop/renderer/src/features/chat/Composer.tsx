@@ -435,7 +435,7 @@ export function Composer({
                   aria-expanded={openMenu === 'model'}
                   onClick={() => setOpenMenu(menu => menu === 'model' ? null : 'model')}
                 >
-                  ✦ 模型⌄
+                  ✦ 模式⌄
                 </button>
                 <div hidden={openMenu !== 'model'}>
                   {renderModelMenu()}

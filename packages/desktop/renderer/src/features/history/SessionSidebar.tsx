@@ -128,17 +128,17 @@ export function SessionSidebar({
         <div className="brand" aria-label="SuperWork">
           <BrandName />
         </div>
-        <button
-          className="new-session"
-          type="button"
-          onClick={onCreate}
-          disabled={disableCreate}
-          title={disableCreate ? '等待 Desktop Core 启动完成' : '选择工作文件夹并新建对话'}
-        >
-          <span aria-hidden="true">{disableCreate ? '…' : '+'}</span>{' '}
-          {disableCreate ? 'Core 启动中' : '新任务'}
-        </button>
       </div>
+      <ul className="sidebar-config-list" aria-label="配置入口">
+        {onOpenPerformance ? <li onClick={onOpenPerformance}>性能</li> : null}
+        {onOpenScheduledTasks ? <li onClick={onOpenScheduledTasks}>定时</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('model')}>模型</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('skills')}>Skills</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('mcp')}>MCP</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('plugins')}>Plugins</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('memory')}>Memory</li> : null}
+        {onOpenSettings ? <li onClick={() => onOpenSettings('channel')}>Channel</li> : null}
+      </ul>
       {onSelectWeixin ? (
         <div className="sidebar-tabs" role="tablist" aria-label="侧边栏视图切换" data-active-tab={tab}>
           <span className="sidebar-tab-indicator" aria-hidden="true" />
@@ -164,6 +164,14 @@ export function SessionSidebar({
           </button>
         </div>
       ) : null}
+      <button
+        className="new-session"
+        type="button"
+        onClick={onCreate}
+        title="选择工作文件夹并新建对话"
+      >
+        <span aria-hidden="true">+</span> 新任务
+      </button>
       <nav className="session-nav" aria-label="对话历史" data-fading={fading}>
         {tab === 'sessions' ? (
           <>
@@ -254,57 +262,14 @@ export function SessionSidebar({
       </nav>
       {onHatchBuddy && onRehatchBuddy && onPetBuddy && onMuteBuddy ? <BuddyPanel state={buddy ?? null} onHatch={onHatchBuddy} onRehatch={onRehatchBuddy} onPet={onPetBuddy} onMute={onMuteBuddy} /> : null}
       <div className="sidebar-actions">
-        {onOpenSettings || onOpenPerformance || onOpenScheduledTasks ? (
-          <div className="settings-shortcuts" aria-label="配置入口">
-            {onOpenPerformance ? <button className="performance-shortcut" type="button" onClick={onOpenPerformance} aria-label="打开性能中心"><span aria-hidden="true">◷</span> 性能</button> : null}
-            {onOpenScheduledTasks ? <button type="button" onClick={onOpenScheduledTasks} aria-label="打开本地定时任务"><span aria-hidden="true">⏱</span> 定时</button> : null}
-            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('model')} aria-label="打开模型配置">
-              <span aria-hidden="true">⚙</span>
-              模型
-            </button> : null}
-            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('skills')} aria-label="打开 Skills 配置">
-              <span aria-hidden="true">✦</span>
-              Skills
-            </button> : null}
-            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('mcp')} aria-label="打开 MCP 配置">
-              <span aria-hidden="true">◎</span>
-              MCP
-            </button> : null}
-            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('plugins')} aria-label="打开 Plugins 配置">
-              <span aria-hidden="true">◫</span>
-              Plugins
-            </button> : null}
-            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('memory')} aria-label="打开 Memory 配置">
-              <span aria-hidden="true">◌</span>
-              Memory
-            </button> : null}
-            {onOpenSettings ? <button type="button" onClick={() => onOpenSettings('channel')} aria-label="打开 Channel 配置">
-              <span aria-hidden="true">☷</span>
-              Channel
-            </button> : null}
-          </div>
-        ) : null}
-        <button
-          className="new-session"
-          type="button"
-          onClick={onCreate}
-          disabled={disableCreate}
-          title={disableCreate ? '等待 Desktop Core 启动完成' : '选择工作文件夹并新建对话'}
-        >
-          <span aria-hidden="true">{disableCreate ? '…' : '+'}</span>{' '}
-          {disableCreate ? 'Core 启动中' : '新任务'}
-        </button>
-        <button
-          className="sidebar-footer"
-          type="button"
-          onClick={onOpenDiagnostics}
-          title="查看诊断日志"
-        >
-          <span className={`status-dot status-${coreStatus}`} aria-hidden="true" />
-          Core {statusLabel(coreStatus)} · 查看日志
-        </button>
         <button className="language-toggle" type="button" onClick={toggleLocale} title={locale === 'zh-CN' ? 'Switch to English' : '切换为中文'} aria-label={locale === 'zh-CN' ? 'Switch to English' : '切换为中文'}>
           <span aria-hidden="true">文</span>{locale === 'zh-CN' ? ' EN' : ' 中'}
+        </button>
+      </div>
+      <div className="sidebar-status-footer">
+        <button type="button" onClick={onOpenDiagnostics} title="查看诊断日志">
+          <span className={`status-dot status-${coreStatus}`} aria-hidden="true" />
+          查看日志
         </button>
       </div>
     </aside>

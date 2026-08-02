@@ -79,13 +79,16 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .sidebar-footer { padding: 12px 8px 0; border: 0; color: var(--muted); background: transparent; text-align: left; font-size: 12px; }
 .sidebar-footer:hover { color: #d0d1d4; }
 .sidebar-actions { display: grid; gap: 8px; padding-top: 12px; }
-.settings-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-.settings-shortcuts button { display: grid; min-width: 0; gap: 3px; justify-items: center; border: 1px solid var(--border); border-radius: 9px; padding: 7px 4px; color: #cfd1d5; background: #17191c; font-size: 10px; }
-.settings-shortcuts button span { color: var(--icon); font-size: 13px; }
-.settings-shortcuts button:hover { border-color: #4b4e54; color: #f1f2f4; background: #23252a; }
+.sidebar-config-list { list-style: none; padding: 0 8px; margin: 0 0 4px; display: flex; flex-direction: column; max-height: 40vh; overflow-y: auto; flex-shrink: 0; }
+.sidebar-config-list li { color: var(--muted); font-size: 11px; line-height: 1.5; cursor: pointer; }
+.sidebar-config-list li:hover { color: #f1f2f4; }
 .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #5b9b68; }
 .status-dot.status-starting, .status-dot.status-restarting { background: #a98b4b; }
 .status-dot.status-failed, .status-dot.status-stopped { background: #a95e66; }
+.sidebar-status-footer { padding: 8px 4px 0; border-top: 1px solid var(--border); }
+.sidebar-status-footer button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; border-radius: 4px; }
+.sidebar-status-footer button:hover { color: #d0d1d4; background: rgba(255,255,255,.04); }
+.sidebar-status-footer .status-dot { margin-right: 0; }
 
 .workspace-area { display: grid; grid-template-columns: minmax(0, 1fr) 300px; width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .conversation { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; height: 100%; min-height: 0; overflow: hidden; background: var(--surface); }

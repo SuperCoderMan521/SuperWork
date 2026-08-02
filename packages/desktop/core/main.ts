@@ -42,8 +42,30 @@ async function* stdinChunks(): AsyncGenerator<string> {
 
 async function main(): Promise<void> {
   logCore('info', 'startup begin')
+  const subscribers = new Set<(event: DesktopEvent) => void>()
+  const subscribe = (listener: (event: DesktopEvent) => void): (() => void) => {
+    subscribers.add(listener)
+    return () => {
+      subscribers.delete(listener)
+    }
+  }
   const emit = (event: DesktopEvent) => {
     process.stdout.write(encodeJsonLine(event))
+    for (const sub of subscribers) {
+      try {
+        sub(event)
+      } catch {
+        // subscriber faults must not break the protocol stream
+      }
+    }
+  }
+
+  // Trae IDE injects CI=true which forces auth to require env-var API key
+  // instead of reading from ~/.claude.json settings file. Remove it so the
+  // core can use the settings file for authentication.
+  if (process.env.CI) {
+    delete process.env.CI
+    logCore('info', 'removed CI env var to allow settings file auth')
   }
 
   const { init } = await import('src/entrypoints/init.js')
@@ -114,7 +136,12 @@ async function main(): Promise<void> {
   )
   const agentMailbox = new DesktopAgentMailboxService()
   const scheduledTasks = new DesktopScheduledTasksService()
-  const weixinChannel = new DesktopWeixinChannelService(emit)
+  const weixinChannel = new DesktopWeixinChannelService({
+    emit,
+    subscribe,
+    getController: () => controller,
+    cwd: process.cwd(),
+  })
   controller = new DesktopConversationController({
     runQuery: input => queryRunner.run(input),
     emit,

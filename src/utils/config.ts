@@ -1439,9 +1439,23 @@ function getConfig<A>(
   const fs = getFsImplementation()
 
   try {
-    const fileContent = fs.readFileSync(file, {
-      encoding: 'utf-8',
-    })
+    let fileContent: string | null = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        fileContent = fs.readFileSync(file, {
+          encoding: 'utf-8',
+        })
+        break
+      } catch (readError) {
+        if (attempt < 2 && readError instanceof Error && 'code' in readError && readError.code === 'EPERM') {
+          const end = Date.now() + 100 * (attempt + 1)
+          while (Date.now() < end) {}
+          continue
+        }
+        throw readError
+      }
+    }
+    if (fileContent === null) throw new Error('Failed to read config after retries')
     try {
       // Strip BOM before parsing - PowerShell 5.x adds BOM to UTF-8 files
       const parsedConfig = jsonParse(stripBOM(fileContent))

@@ -15,6 +15,7 @@ import type {
   PermissionMode,
 } from '../../../shared/protocol.js'
 import { ConversationPane } from '../features/chat/ConversationPane.js'
+import { weixinConversationToRendererSession } from '../features/chat/weixinAdapter.js'
 import { Composer } from '../features/chat/Composer.js'
 import { DiagnosticsDrawer } from '../features/diagnostics/DiagnosticsDrawer.js'
 import {
@@ -234,6 +235,7 @@ export function App(): React.ReactNode {
   >(null)
   const [weixinRuntime, setWeixinRuntime] =
     useState<DesktopChannelWeixinRuntime | null>(null)
+  const [selectedWeixinChatId, setSelectedWeixinChatId] = useState<string | null>(null)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null)
@@ -365,6 +367,13 @@ export function App(): React.ReactNode {
   }, [])
 
   const sessions = useMemo(() => selectSidebarSessions(state), [state])
+  const selectedWeixinConv = useMemo(
+    () =>
+      selectedWeixinChatId
+        ? weixinRuntime?.conversations.find(c => c.chatId === selectedWeixinChatId) ?? null
+        : null,
+    [selectedWeixinChatId, weixinRuntime],
+  )
   const effectiveSelectedId = selectedId ?? state.selectedSessionId
   const selected = effectiveSelectedId
     ? state.sessions[effectiveSelectedId]
@@ -488,6 +497,7 @@ export function App(): React.ReactNode {
 
   const selectSession = (sessionId: string) => {
     setSelectedId(sessionId)
+    setSelectedWeixinChatId(null)
     setSelectedFilePath(null)
     setFileContent(null)
     const session = state.sessions[sessionId]
@@ -497,6 +507,13 @@ export function App(): React.ReactNode {
     } else {
       window.desktopApi.resumeSession(sessionId)
     }
+  }
+
+  const selectWeixin = (chatId: string) => {
+    setSelectedWeixinChatId(chatId)
+    setSelectedId(null)
+    setSelectedFilePath(null)
+    setFileContent(null)
   }
 
   const createSession = () => {
@@ -516,8 +533,12 @@ export function App(): React.ReactNode {
     window.desktopApi.createSession(workspace)
   }
 
-  const deleteSession = (sessionId: string) => {
-    if (!window.confirm('确定删除这个对话？此操作不可撤销。')) return
+  const deleteSession = async (sessionId: string) => {
+    const confirmed = await window.desktopApi.confirm({
+      title: '删除对话',
+      message: '确定删除这个对话？此操作不可撤销。',
+    })
+    if (!confirmed) return
     window.desktopApi.deleteSession(sessionId)
     if (selectedId === sessionId) setSelectedId(null)
   }
@@ -658,6 +679,9 @@ export function App(): React.ReactNode {
       onRehatchBuddy={() => window.desktopApi.rehatchBuddy()}
       onPetBuddy={() => window.desktopApi.petBuddy()}
       onMuteBuddy={muted => window.desktopApi.setBuddyMuted(muted)}
+      weixinConversations={weixinRuntime?.conversations ?? []}
+      selectedWeixinChatId={selectedWeixinChatId}
+      onSelectWeixin={selectWeixin}
     />
   )
 
@@ -720,7 +744,15 @@ export function App(): React.ReactNode {
       onCloseFiles={() => setFilePanelOpen(false)}
       sidebar={sidebar}
       chat={
-        selected ? (
+        selectedWeixinConv ? (
+          <ConversationPane
+            session={weixinConversationToRendererSession(selectedWeixinConv)}
+            readOnly
+            onSubmit={() => {}}
+            onInterrupt={() => {}}
+            onSelectWorkspace={() => {}}
+          />
+        ) : selected ? (
           <ConversationPane
             session={selected}
             onSubmit={submitPrompt}

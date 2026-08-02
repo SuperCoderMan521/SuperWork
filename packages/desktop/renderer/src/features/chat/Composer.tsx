@@ -254,7 +254,7 @@ export function Composer({
         }}
       >
         <strong>Ask</strong>
-        <span>普通问答与默认 Claude Code 权限</span>
+        <span>普通问答与默认 SuperWork 权限</span>
       </button>
       <button
         type="button"
@@ -265,7 +265,7 @@ export function Composer({
         }}
       >
         <strong>Plan</strong>
-        <span>进入 Claude Code 计划模式，先规划再执行</span>
+        <span>进入 SuperWork 计划模式，先规划再执行</span>
       </button>
     </div>
   )
@@ -302,10 +302,6 @@ export function Composer({
 
   const renderApprovalMenu = () => (
     <div className="composer-approval-menu" role="menu">
-      <header>
-        <strong>应如何批准 ChatGPT 操作？</strong>
-        <button type="button">了解更多</button>
-      </header>
       {permissionModes.map(item => (
         <button
           key={item.mode}
@@ -439,7 +435,7 @@ export function Composer({
                   aria-expanded={openMenu === 'model'}
                   onClick={() => setOpenMenu(menu => menu === 'model' ? null : 'model')}
                 >
-                  ✦ 模型⌄
+                  ✦ 模式⌄
                 </button>
                 <div hidden={openMenu !== 'model'}>
                   {renderModelMenu()}
@@ -506,7 +502,7 @@ export function Composer({
                   onClick={submit}
                   disabled={!text.trim()}
                 >
-                  ▲
+                  ↑
                 </button>
               )}
             </div>

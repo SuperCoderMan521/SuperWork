@@ -28,6 +28,7 @@ describe('DesktopConversationController', () => {
 
     expect(events.map(event => event.type)).toEqual([
       'session.snapshot',
+      'session.snapshot',
       'message.added',
       'generation.state',
       'message.added',
@@ -35,6 +36,74 @@ describe('DesktopConversationController', () => {
       'generation.state',
     ])
     expect(controller.getSession(session.id)?.generationState).toBe('idle')
+  })
+
+  test('derives the session title from the first user prompt', async () => {
+    const events: DesktopEvent[] = []
+    const controller = new DesktopConversationController({
+      runQuery: () => completedQuery(),
+      emit: event => events.push(event),
+      createId: () => 'session-1',
+      now: () => 100,
+      defaultModel: 'sonnet',
+      defaultMode: 'default',
+    })
+
+    const session = controller.createSession('G:/project')
+    expect(session.title).toBe('New conversation')
+
+    await controller.submitPrompt(session.id, 'Help me refactor the auth module')
+
+    expect(controller.getSession(session.id)?.title).toBe('Help me refactor the auth module')
+
+    const titleSnapshot = events.find(
+      event =>
+        event.type === 'session.snapshot' &&
+        event.session.title !== 'New conversation',
+    )
+    expect(titleSnapshot?.type).toBe('session.snapshot')
+  })
+
+  test('truncates long prompts and collapses whitespace in the derived title', async () => {
+    const controller = new DesktopConversationController({
+      runQuery: () => completedQuery(),
+      emit: () => {},
+      createId: () => 'session-1',
+      now: () => 100,
+      defaultModel: 'sonnet',
+      defaultMode: 'default',
+    })
+
+    const session = controller.createSession('G:/project')
+    const longPrompt = `Please review this code\n\n${'a'.repeat(80)}`
+    await controller.submitPrompt(session.id, longPrompt)
+
+    const title = controller.getSession(session.id)?.title ?? ''
+    expect(title).toMatch(/…$/)
+    expect(title).not.toContain('\n')
+    expect(title.length).toBeLessThanOrEqual(49)
+  })
+
+  test('does not overwrite a non-default title on subsequent prompts', async () => {
+    let queryCount = 0
+    const controller = new DesktopConversationController({
+      runQuery: () => {
+        queryCount += 1
+        return completedQuery()
+      },
+      emit: () => {},
+      createId: () => 'session-1',
+      now: () => 100,
+      defaultModel: 'sonnet',
+      defaultMode: 'default',
+    })
+
+    const session = controller.createSession('G:/project')
+    await controller.submitPrompt(session.id, 'First prompt')
+    await controller.submitPrompt(session.id, 'Second prompt that should not replace the title')
+
+    expect(controller.getSession(session.id)?.title).toBe('First prompt')
+    expect(queryCount).toBe(2)
   })
 
   test('keeps only one stored assistant message when streaming finalizes a placeholder', async () => {

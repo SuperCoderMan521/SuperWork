@@ -364,6 +364,28 @@ export function writeFileSyncAndFlush_DEPRECATED(
   content: string,
   options: { encoding: BufferEncoding; mode?: number } = { encoding: 'utf-8' },
 ): void {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      writeFileSyncAndFlushInner(filePath, content, options)
+      return
+    } catch (error) {
+      if (attempt < 2 && error instanceof Error && 'code' in error && error.code === 'EPERM') {
+        logForDebugging(`EPERM on ${filePath}, retrying (attempt ${attempt + 2}/3)`)
+        // Synchronous sleep — file locks on Windows are typically very brief
+        const end = Date.now() + 100 * (attempt + 1)
+        while (Date.now() < end) {}
+        continue
+      }
+      throw error
+    }
+  }
+}
+
+function writeFileSyncAndFlushInner(
+  filePath: string,
+  content: string,
+  options: { encoding: BufferEncoding; mode?: number } = { encoding: 'utf-8' },
+): void {
   const fs = getFsImplementation()
 
   // Check if the target file is a symlink to preserve it for all users

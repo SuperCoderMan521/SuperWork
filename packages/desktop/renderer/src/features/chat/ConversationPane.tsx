@@ -45,6 +45,7 @@ type ConversationPaneProps = {
   error?: string | null
   onDismissError?: () => void
   onOpenDiagnostics?: () => void
+  readOnly?: boolean
 }
 
 type MessageTimelineItem = {
@@ -317,6 +318,7 @@ export function ConversationPane({
   error,
   onDismissError,
   onOpenDiagnostics,
+  readOnly = false,
 }: ConversationPaneProps): React.ReactNode {
   const listRef = useRef<HTMLElement | null>(null)
   const stickToBottom = useRef(true)
@@ -356,7 +358,11 @@ export function ConversationPane({
       <header className="conversation-header">
         <div>
           <h1>{session.title}</h1>
-          <p>{session.cwd}</p>
+          <p>
+            {readOnly
+              ? `${session.cwd} · 微信对话（只读）`
+              : session.cwd}
+          </p>
         </div>
       </header>
       <section
@@ -434,7 +440,7 @@ export function ConversationPane({
           )
         })}
       </section>
-      {session.permissionOrder[0] && onResolvePermission ? (
+      {!readOnly && session.permissionOrder[0] && onResolvePermission ? (
         <PermissionPanel
           request={session.permissions[session.permissionOrder[0]]!}
           onResolve={(decision, payload) =>
@@ -458,6 +464,7 @@ export function ConversationPane({
         </div>
       ) : null}
       <PlanProgressOverlay session={session} />
+      {!readOnly ? (
       <Composer
         generating={
           session.generationState === 'running' ||
@@ -474,6 +481,7 @@ export function ConversationPane({
         onOpenMcp={onOpenMcp}
         onModeChange={onModeChange}
       />
+      ) : null}
     </main>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import type { RendererSession } from '../../app/reducer.js'
 
 type PlanProgressStep = {
@@ -88,7 +88,7 @@ export function derivePlanProgress(session: RendererSession): PlanProgressState 
   const steps: PlanProgressStep[] = [
     {
       label: '进入 Plan 模式',
-      description: '已切换到先规划、后执行的 Claude Code 模式',
+      description: '已切换到先规划、后执行的 SuperWork 模式',
       done: planModeSeen,
       active: planModeSeen && !hasRead && !running,
     },
@@ -100,7 +100,7 @@ export function derivePlanProgress(session: RendererSession): PlanProgressState 
     },
     {
       label: '写入或更新计划文件',
-      description: '等待 Claude Code 将计划写入 plan file',
+      description: '等待 SuperWork 将计划写入 plan file',
       done: hasPlanWrite || exitPlanActive || exitPlanDone,
       active: planWritingActive,
     },

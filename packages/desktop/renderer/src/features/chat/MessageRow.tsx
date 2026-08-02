@@ -1,4 +1,4 @@
-import type { DesktopMessage } from '../../../../shared/protocol.js'
+﻿import type { DesktopMessage } from '../../../../shared/protocol.js'
 import { BrandName } from '../../components/BrandName.js'
 import { MarkdownMessage } from './MarkdownMessage.js'
 import { selectedSlashCommand } from './slashCommands.js'
@@ -46,7 +46,7 @@ function SlashCommandContent({ content }: { content: string }): React.ReactNode 
     <div className="message-content command-message">
       <div className="command-message-icon" aria-hidden="true">⌘</div>
       <div className="command-message-body">
-        <span>Claude Code 指令</span>
+        <span>SuperWork 指令</span>
         <strong>{command.command}</strong>
         <small>{command.description}</small>
       </div>

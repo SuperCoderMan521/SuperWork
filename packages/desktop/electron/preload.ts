@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { DesktopEventSchema } from '../shared/schemas.js'
 import {
   DESKTOP_COMMAND_CHANNEL,
+  DESKTOP_CONFIRM_CHANNEL,
   DESKTOP_DIAGNOSTICS_GET_CHANNEL,
   DESKTOP_EVENT_CHANNEL,
   DESKTOP_LOG_FOLDER_OPEN_CHANNEL,
@@ -36,6 +37,8 @@ const api = createDesktopApi(
         editorId,
         workspace,
       }),
+    confirm: options =>
+      ipcRenderer.invoke(DESKTOP_CONFIRM_CHANNEL, options),
   },
 )
 
